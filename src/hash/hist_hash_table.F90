@@ -91,6 +91,10 @@ module hist_hash_table
    !        logic in the routine that optimizes character strings of length 8.
    !
 
+   ! Public interfaces
+   public :: new_hashable_char
+   public :: new_hashable_int
+
    type, abstract, public :: hist_hashable_t
       ! The hashable type is a base type that contains a hash key.
    contains
@@ -103,16 +107,12 @@ module hist_hash_table
       procedure :: key => hist_hashable_char_get_key
    end type hist_hashable_char_t
 
-   public :: new_hashable_char
-
    type, public, extends(hist_hashable_t) :: hist_hashable_int_t
       integer, private :: value
    contains
       procedure :: key => hist_hashable_int_get_key
       procedure :: val => hist_hashable_int_get_val
    end type hist_hashable_int_t
-
-   public :: new_hashable_int
 
    integer, parameter :: gen_hash_key_offset = 21467 ! z'000053db'
 
@@ -149,7 +149,7 @@ module hist_hash_table
       procedure :: table_value  => hash_table_table_value
    end type hist_hash_table_t
 
-   ! Abstract interface for key procedure of hist_hashable class
+   ! Abstract interface for key procedure of hist_hashable_t class
    abstract interface
       function hist_hashable_get_key(hashable)
          import :: hist_hashable_t
@@ -158,16 +158,47 @@ module hist_hash_table
       end function hist_hashable_get_key
    end interface
 
+   !! Private interfaces
+   private :: have_error      ! Has a called routine detected an error?
+   private :: clear_optstring ! Clear a string, if present
+
 CONTAINS
 
    !#######################################################################
 
-   function new_hashable_char(name_in)
-      type(hist_hashable_char_t)   :: new_hashable_char
-      character(len=*), intent(in) :: name_in
+   logical function have_error(errmsg)
+      ! Return .true. iff <errmsg> is present and contains text
+      character(len=*), optional, intent(in) :: errmsg
 
-      new_hashable_char%name = name_in
-   end function new_hashable_char
+      have_error = present(errmsg)
+      if (have_error) then
+         have_error = len_trim(errmsg) > 0
+      end if
+   end function have_error
+
+   !#######################################################################
+
+   subroutine clear_optstring(str)
+      ! clear <str> if it is present
+      character(len=*), optional, intent(inout) :: str
+
+      if (present(str)) then
+         str = ''
+      end if
+   end subroutine clear_optstring
+
+   !#######################################################################
+
+   subroutine new_hashable_char(name_in, new_obj)
+      character(len=*), intent(in)        :: name_in
+      type(hist_hashable_char_t), pointer :: new_obj
+
+      if (associated(new_obj)) then
+         deallocate(new_obj)
+      end if
+      allocate(new_obj)
+      new_obj%name = name_in
+   end subroutine new_hashable_char
 
    !#######################################################################
 
@@ -181,12 +212,16 @@ CONTAINS
 
    !#######################################################################
 
-   function new_hashable_int(value_in)
-      type(hist_hashable_int_t) :: new_hashable_int
-      integer, intent(in)       :: value_in
+   subroutine new_hashable_int(val_in, new_obj)
+      integer, intent(in)                :: val_in
+      type(hist_hashable_int_t), pointer :: new_obj
 
-      new_hashable_int%value = value_in
-   end function new_hashable_int
+      if (associated(new_obj)) then
+         deallocate(new_obj)
+      end if
+      allocate(new_obj)
+      new_obj%value = val_in
+   end subroutine new_hashable_int
 
    !#######################################################################
 
@@ -231,14 +266,13 @@ CONTAINS
       class(hist_hash_table_t)      :: this
       integer,           intent(in) :: tbl_size   ! new table size
       integer, optional, intent(in) :: key_off    ! key offset
-      ! Local variable
-      integer                       :: index
 
       ! Clear this table so it can be initialized
       if (allocated(this%primary_table)) then
          deallocate(this%primary_table)
       end if
-      this%table_size = tbl_size
+      ! Avoid too-large tables
+      this%table_size = ishft(1, MIN(tbl_size, bit_size(1) - 2))
       allocate(this%primary_table(this%table_size))
       if (present(key_off)) then
          this%key_offset = key_off
@@ -247,7 +281,7 @@ CONTAINS
 
    !#######################################################################
 
-   integer function hash_table_key_hash(this, string) result(hash_key)
+   integer function hash_table_key_hash(this, string, errmsg) result(hash_key)
       !
       !-----------------------------------------------------------------------
       !
@@ -261,8 +295,10 @@ CONTAINS
       !
       !  Arguments:
       !
-      class(hist_hash_table_t)     :: this
-      character(len=*), intent(in) :: string
+      class(hist_hash_table_t)                :: this
+      character(len=*),           intent(in)  :: string
+      character(len=*), optional, intent(out) :: errmsg
+      character(len=*), parameter             :: subname = 'HASH_TABLE_KEY_HASH'
       !
       !  Local.
       !
@@ -282,7 +318,17 @@ CONTAINS
          hash = ieor(hash, (ichar(string(index:index)) * hash_fact))
       end do
 
-      hash_key = iand(hash, this%table_size - 1)
+      hash_key = iand(hash, this%table_size - 1) + 1
+      if ((hash_key < 1) .or. (hash_key > this%table_size)) then
+         if (present(errmsg)) then
+            write(errmsg, '(2a,2(i0,a))') subname, ' ERROR: Key Hash, ',      &
+                 hash_key, ' out of bounds, [1, ', this%table_size, ']'
+         else
+            write(6, '(2a,2(i0,a))') subname, ' ERROR: Key Hash, ',           &
+                 hash_key, ' out of bounds, [1, ', this%table_size, ']'
+            STOP 1
+         end if
+      end if
 
    end function hash_table_key_hash
 
@@ -311,28 +357,38 @@ CONTAINS
       type(table_entry_t), pointer   :: next_ptr
       character(len=*),    parameter :: subname = 'HASH_TABLE_TABLE_INDEX'
 
-      errmsg = ''
+      call clear_optstring(errmsg)
       nullify(tbl_val)
-      hash_key = this%key_hash(key)
-      if (this%primary_table(hash_key)%entry_value%key() == trim(key)) then
-         tbl_val => this%primary_table(hash_key)%entry_value
-      else
-         next_ptr => this%primary_table(hash_key)%next
-         do
-            if (associated(next_ptr)) then
-               if (next_ptr%entry_value%key() == trim(key)) then
-                  tbl_val => next_ptr%entry_value
-                  exit
-               end if
-               next_ptr => next_ptr%next
+      hash_key = this%key_hash(key, errmsg=errmsg)
+      ASSOCIATE(tbl_entry => this%primary_table(hash_key))
+         if (have_error(errmsg)) then
+            errmsg = trim(errmsg)//', called from '//subname
+         else if (associated(tbl_entry%entry_value)) then
+            if (tbl_entry%entry_value%key() == trim(key)) then
+               tbl_val => tbl_entry%entry_value
             else
-               exit
+               next_ptr => tbl_entry%next
+               do
+                  if (associated(next_ptr)) then
+                     if (associated(next_ptr%entry_value)) then
+                        if (next_ptr%entry_value%key() == trim(key)) then
+                           tbl_val => next_ptr%entry_value
+                           exit
+                        end if
+                     end if
+                     next_ptr => next_ptr%next
+                  else
+                     exit
+                  end if
+               end do
             end if
-         end do
-      end if
+         end if
+      END ASSOCIATE
 
       if ((.not. associated(tbl_val)) .and. present(errmsg)) then
-         write(errmsg, *) subname, ": No entry for '", trim(key), "'"
+         if (.not. have_error(errmsg)) then ! Still need to test for empty
+            write(errmsg, *) subname, ": No entry for '", trim(key), "'"
+         end if
       end if
 
    end function hash_table_table_value
@@ -352,7 +408,7 @@ CONTAINS
 
       !  Dummy arguments:
       class(hist_hash_table_t)                      :: this
-      class(hist_hashable_t), pointer               :: newval
+      class(hist_hashable_t), target                :: newval
       character(len=*),       optional, intent(out) :: errmsg
       ! Local variables
       integer                          :: hash_ind
@@ -362,10 +418,13 @@ CONTAINS
       type(table_entry_t), pointer     :: new_entry
       character(len=*),    parameter   :: subname = 'HASH_TABLE_ADD_HASH_KEY'
 
+      call clear_optstring(errmsg)
       newkey = newval%key()
-      hash_ind = this%key_hash(newkey)
+      hash_ind = this%key_hash(newkey, errmsg=errmsg)
       ! Check for this entry
-      if (associated(this%table_value(newkey))) then
+      if (have_error(errmsg)) then
+         errmsg = trim(errmsg)//', called from '//subname
+      else if (associated(this%table_value(newkey))) then
          if (present(errmsg)) then
             write(errmsg, *) subname, " ERROR: key, '", newkey,               &
                  "' already in table"
@@ -396,6 +455,8 @@ CONTAINS
                   ovflw_len = 1
                end if
                this%max_collision = MAX(this%max_collision, ovflw_len)
+            else
+               tbl_entry%entry_value => newval
             end if
          END ASSOCIATE
       end if
