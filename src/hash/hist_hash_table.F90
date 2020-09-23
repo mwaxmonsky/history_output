@@ -1,6 +1,8 @@
 !!XXgoldyXX: To do, statistics output
 module hist_hash_table
 
+   use hist_hashable, only: hist_hashable_t
+
    implicit none
    private
 
@@ -91,29 +93,6 @@ module hist_hash_table
    !        logic in the routine that optimizes character strings of length 8.
    !
 
-   ! Public interfaces
-   public :: new_hashable_char
-   public :: new_hashable_int
-
-   type, abstract, public :: hist_hashable_t
-      ! The hashable type is a base type that contains a hash key.
-   contains
-      procedure(hist_hashable_get_key), deferred :: key
-   end type hist_hashable_t
-
-   type, public, extends(hist_hashable_t) :: hist_hashable_char_t
-      character(len=:), private, allocatable :: name
-   contains
-      procedure :: key => hist_hashable_char_get_key
-   end type hist_hashable_char_t
-
-   type, public, extends(hist_hashable_t) :: hist_hashable_int_t
-      integer, private :: value
-   contains
-      procedure :: key => hist_hashable_int_get_key
-      procedure :: val => hist_hashable_int_get_val
-   end type hist_hashable_int_t
-
    integer, parameter :: gen_hash_key_offset = 21467 ! z'000053db'
 
    integer, parameter :: tbl_max_idx = 15
@@ -149,15 +128,6 @@ module hist_hash_table
       procedure :: table_value  => hash_table_table_value
    end type hist_hash_table_t
 
-   ! Abstract interface for key procedure of hist_hashable_t class
-   abstract interface
-      function hist_hashable_get_key(hashable)
-         import :: hist_hashable_t
-         class(hist_hashable_t), intent(in) :: hashable
-         character(len=:), allocatable      :: hist_hashable_get_key
-      end function hist_hashable_get_key
-   end interface
-
    !! Private interfaces
    private :: have_error      ! Has a called routine detected an error?
    private :: clear_optstring ! Clear a string, if present
@@ -186,64 +156,6 @@ CONTAINS
          str = ''
       end if
    end subroutine clear_optstring
-
-   !#######################################################################
-
-   subroutine new_hashable_char(name_in, new_obj)
-      character(len=*), intent(in)        :: name_in
-      type(hist_hashable_char_t), pointer :: new_obj
-
-      if (associated(new_obj)) then
-         deallocate(new_obj)
-      end if
-      allocate(new_obj)
-      new_obj%name = name_in
-   end subroutine new_hashable_char
-
-   !#######################################################################
-
-   function hist_hashable_char_get_key(hashable)
-      ! Return the hashable char class key (name)
-      class(hist_hashable_char_t), intent(in) :: hashable
-      character(len=:), allocatable           :: hist_hashable_char_get_key
-
-      hist_hashable_char_get_key = hashable%name
-   end function hist_hashable_char_get_key
-
-   !#######################################################################
-
-   subroutine new_hashable_int(val_in, new_obj)
-      integer, intent(in)                :: val_in
-      type(hist_hashable_int_t), pointer :: new_obj
-
-      if (associated(new_obj)) then
-         deallocate(new_obj)
-      end if
-      allocate(new_obj)
-      new_obj%value = val_in
-   end subroutine new_hashable_int
-
-   !#######################################################################
-
-   function hist_hashable_int_get_key(hashable)
-      ! Return the hashable int class key (value ==> string)
-      class(hist_hashable_int_t), intent(in) :: hashable
-      character(len=:), allocatable          :: hist_hashable_int_get_key
-
-      character(len=32) :: key_str
-
-      write(key_str, '(i0)') hashable%val()
-      hist_hashable_int_get_key = trim(key_str)
-   end function hist_hashable_int_get_key
-
-   !#######################################################################
-
-   integer function hist_hashable_int_get_val(hashable)
-      ! Return the hashable int class value
-      class(hist_hashable_int_t), intent(in) :: hashable
-
-      hist_hashable_int_get_val = hashable%value
-   end function hist_hashable_int_get_val
 
    !#######################################################################
 

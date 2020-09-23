@@ -1,5 +1,5 @@
 module test_hash_utils
-   use hist_hash_table, only: hist_hashable_char_t
+   use hist_hashable, only: hist_hashable_char_t
 
    implicit none
    private
@@ -12,8 +12,8 @@ module test_hash_utils
 end module test_hash_utils
 
 program test_hash
-   use hist_hash_table, only: hist_hashable_t, hist_hash_table_t
-   use hist_hash_table, only: new_hashable_char
+   use hist_hashable,   only: hist_hashable_t, new_hashable_char
+   use hist_hash_table, only: hist_hash_table_t
    use test_hash_utils, only: hash_object_t
 
    character(len=10) :: hash_names(4) = (/ 'foo       ', 'bar       ',        &

@@ -18,7 +18,11 @@ hist_hash_table.o: $(HASHPATH)/hist_hash_table.F90
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
-test_hash_table: test_hash.F90 hist_hash_table.o
+hist_hashable.o: $(HASHPATH)/hist_hashable.F90
+	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
+	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
+
+test_hash_table: test_hash.F90 hist_hashable.o hist_hash_table.o
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 
