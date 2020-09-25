@@ -11,17 +11,23 @@ module hist_field
    public :: hist_get_field ! Get field from a buffer
 
    type, public, extends(hist_hashable_t) :: hist_field_info_t
-      ! Field metadata
-      character(len=:), allocatable, private :: diag_name ! History file name
-      character(len=:), allocatable, private :: standard_name
-      character(len=:), allocatable, private :: long_name
-      character(len=:), allocatable, private :: units
+      ! Field metadata (note: all strings should be lowercase)
+      character(len=:), allocatable, private :: diag_file_name
+      character(len=:), allocatable, private :: field_standard_name
+      character(len=:), allocatable, private :: field_long_name
+      character(len=:), allocatable, private :: field_units
+      character(len=:), allocatable, private :: field_type
 ! type kind rank?
       ! dimensions?
       type(hist_field_info_t), pointer :: next => NULL()
       class(hist_buffer_t),    pointer :: buffers => NULL()
    contains
-      procedure :: key => hist_field_info_get_key
+      procedure :: key           => hist_field_info_get_key
+      procedure :: diag_name     => field_get_diag_name
+      procedure :: standard_name => field_get_standard_name
+      procedure :: long_name     => field_get_long_name
+      procedure :: units         => field_get_units
+      procedure :: type          => field_get_type
       final     :: finalize_field
    end type hist_field_info_t
 
@@ -30,32 +36,34 @@ CONTAINS
    !#######################################################################
 
    function hist_field_info_get_key(hashable)
-      ! Return the hashable field info class key (diag_name)
+      ! Return the hashable field info class key (diag_file_name)
       class(hist_field_info_t), intent(in) :: hashable
       character(len=:), allocatable        :: hist_field_info_get_key
 
-      hist_field_info_get_key = hashable%diag_name
+      hist_field_info_get_key = hashable%diag_file_name
    end function hist_field_info_get_key
 
    !#######################################################################
 
    subroutine hist_field_initialize(field, diag_name_in, std_name_in,         &
-        long_name_in, units_in, errmsg)
+        long_name_in, units_in, type_in, errmsg)
 
       type(hist_field_info_t), pointer               :: field
       character(len=*),                  intent(in)  :: diag_name_in
       character(len=*),                  intent(in)  :: std_name_in
       character(len=*),                  intent(in)  :: long_name_in
       character(len=*),                  intent(in)  :: units_in
+      character(len=*),                  intent(in)  :: type_in
       character(len=*),        optional, intent(out) :: errmsg
 
       if (present(errmsg)) then
          errmsg = ''
       end if
-      field%diag_name = diag_name_in
-      field%standard_name = std_name_in
-      field%long_name = long_name_in
-      field%units = units_in
+      field%diag_file_name = diag_name_in
+      field%field_standard_name = std_name_in
+      field%field_long_name = long_name_in
+      field%field_units = units_in
+      field%field_type = type_in
    end subroutine hist_field_initialize
 
    !#######################################################################
@@ -74,23 +82,71 @@ CONTAINS
 
    !#######################################################################
 
+   function field_get_diag_name(this) result(info)
+      class(hist_field_info_t), intent(in) :: this
+      character(len=:), allocatable        :: info
+
+      info = this%diag_file_name
+   end function field_get_diag_name
+
+   !#######################################################################
+
+   function field_get_standard_name(this) result(info)
+      class(hist_field_info_t), intent(in) :: this
+      character(len=:), allocatable        :: info
+
+      info = this%field_standard_name
+   end function field_get_standard_name
+
+   !#######################################################################
+
+   function field_get_long_name(this) result(info)
+      class(hist_field_info_t), intent(in) :: this
+      character(len=:), allocatable        :: info
+
+      info = this%field_long_name
+   end function field_get_long_name
+
+   !#######################################################################
+
+   function field_get_units(this) result(info)
+      class(hist_field_info_t), intent(in) :: this
+      character(len=:), allocatable        :: info
+
+      info = this%field_units
+   end function field_get_units
+
+   !#######################################################################
+
+   function field_get_type(this) result(info)
+      class(hist_field_info_t), intent(in) :: this
+      character(len=:), allocatable        :: info
+
+      info = this%field_type
+   end function field_get_type
+
+   !#######################################################################
+
    subroutine finalize_field(this)
       ! Dummy Argument
       type(hist_field_info_t) :: this
       ! Local Variables
       class(hist_buffer_t), pointer :: next_buf
 
-      if (allocated(this%diag_name)) then
-         deallocate(this%diag_name)
+      if (allocated(this%diag_file_name)) then
+         deallocate(this%diag_file_name)
       end if
-      if (allocated(this%standard_name)) then
-         deallocate(this%standard_name)
+      if (allocated(this%field_standard_name)) then
+         deallocate(this%field_standard_name)
       end if
-      if (allocated(this%long_name)) then
-         deallocate(this%long_name)
+      if (allocated(this%field_long_name)) then
+         deallocate(this%field_long_name)
       end if
-      if (allocated(this%units)) then
-         deallocate(this%units)
+      if (allocated(this%field_units)) then
+         deallocate(this%field_units)
+      end if
+      if (allocated(this%field_type)) then
+         deallocate(this%field_type)
       end if
       ! We are not in charge of the field chain so just nullify
       nullify(this%next)

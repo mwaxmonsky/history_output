@@ -14,8 +14,8 @@ end module test_hist_buffer_utils
 #endif
 
 program test_hist_buffer
-   use hist_field,             only: hist_field_info_t
-   use hist_field,             only: hist_new_field, hist_get_field
+   use hist_field,             only: hist_field_info_t, hist_get_field
+   use hist_api,               only: hist_new_field
 
    type(hist_field_info_t), pointer  :: my_fields => NULL()
    integer                           :: index
@@ -26,7 +26,7 @@ program test_hist_buffer
 
    errors = ''
    call hist_new_field(my_fields, 'U', 'eastward_wind', 'Meridional Wind',    &
-        'm s-1')
+        'm s-1', 'real')
 
    if (errcnt > 0) then
       write(6, '(a,i0,a)') 'FAIL, ', errcnt, ' errors found'

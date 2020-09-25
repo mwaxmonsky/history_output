@@ -21,37 +21,53 @@ module hist_buffer
       ! hist_buffer_t is an abstract base class for hist_outfld buffers
       class(hist_hashable_t), pointer          :: field_info => NULL()
       integer,                         private :: vol = -1 ! For host output
+      integer,                         private :: horiz_axis_ind = 0
       class(hist_buffer_t),   pointer          :: next
    contains
       procedure                            :: field  => get_field_info
       procedure                            :: volume => get_volume
+      procedure                            :: horiz_axis_index
+      procedure                            :: init_buffer
+      procedure(hist_buff_init),  deferred :: initialize
       procedure(hist_buff_clear), deferred :: clear
    end type hist_buffer_t
 
    type, public, extends(hist_buffer_t) :: hist_buffer_1dreal32_inst_t
       integer               :: num_samples = 0
-      real(REAL32), pointer :: data(:)
+      real(REAL32), pointer :: data(:) => NULL()
    CONTAINS
       procedure :: clear => buff_1dreal32_inst_clear
       procedure :: accumulate => buff_1dreal32_inst_accum
       procedure :: norm_value => buff_1dreal32_inst_value
+      procedure :: initialize => init_buff_1dreal32
    end type hist_buffer_1dreal32_inst_t
 
    type, public, extends(hist_buffer_t) :: hist_buffer_1dreal64_inst_t
       integer               :: num_samples = 0
-      real(REAL64), pointer :: data(:)
+      real(REAL64), pointer :: data(:) => NULL()
    CONTAINS
       procedure :: clear => buff_1dreal64_inst_clear
       procedure :: accumulate => buff_1dreal64_inst_accum
       procedure :: norm_value => buff_1dreal64_inst_value
+      procedure :: initialize => init_buff_1dreal64
    end type hist_buffer_1dreal64_inst_t
 
-   ! Abstract interface for clear procedure of hist_buffer_t class
+   ! Abstract interfaces for hist_buffer_t class
    abstract interface
       subroutine hist_buff_clear(this)
          import :: hist_buffer_t
          class(hist_buffer_t), intent(inout) :: this
       end subroutine hist_buff_clear
+   end interface
+
+   abstract interface
+      subroutine hist_buff_init(this, volume_in, horiz_axis_in, shape_in)
+         import :: hist_buffer_t
+         class(hist_buffer_t), intent(inout) :: this
+         integer,              intent(in)    :: volume_in
+         integer,              intent(in)    :: horiz_axis_in
+         integer,              intent(in)    :: shape_in(:)
+      end subroutine hist_buff_init
    end interface
 
 CONTAINS
@@ -73,11 +89,43 @@ CONTAINS
 
    !#######################################################################
 
+   integer function horiz_axis_index(this)
+      class(hist_buffer_t), intent(in) :: this
+
+      horiz_axis_index = this%horiz_axis_ind
+   end function horiz_axis_index
+
+   !#######################################################################
+
+   subroutine init_buffer(this, volume_in, horiz_axis_in)
+      class(hist_buffer_t), intent(inout) :: this
+      integer,              intent(in)    :: volume_in
+      integer,              intent(in)    :: horiz_axis_in
+
+      this%vol = volume_in
+      this%horiz_axis_ind = horiz_axis_in
+   end subroutine init_buffer
+
+   !#######################################################################
+
    subroutine buff_1dreal32_inst_clear(this)
       class(hist_buffer_1dreal32_inst_t), intent(inout) :: this
 
       this%num_samples = 0
    end subroutine buff_1dreal32_inst_clear
+
+   !#######################################################################
+
+   subroutine init_buff_1dreal32(this, volume_in, horiz_axis_in, shape_in)
+      class(hist_buffer_1dreal32_inst_t), intent(inout) :: this
+      integer,                            intent(in)    :: volume_in
+      integer,                            intent(in)    :: horiz_axis_in
+      integer,                            intent(in)    :: shape_in(:)
+
+      call init_buffer(this, volume_in, horiz_axis_in)
+      allocate(this%data(shape_in(1)))
+
+   end subroutine init_buff_1dreal32
 
    !#######################################################################
 
@@ -114,6 +162,19 @@ CONTAINS
       this%num_samples = 0
 
    end subroutine buff_1dreal64_inst_clear
+
+   !#######################################################################
+
+   subroutine init_buff_1dreal64(this, volume_in, horiz_axis_in, shape_in)
+      class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
+      integer,                            intent(in)    :: volume_in
+      integer,                            intent(in)    :: horiz_axis_in
+      integer,                            intent(in)    :: shape_in(:)
+
+      call init_buffer(this, volume_in, horiz_axis_in)
+      allocate(this%data(shape_in(1)))
+
+   end subroutine init_buff_1dreal64
 
    !#######################################################################
 

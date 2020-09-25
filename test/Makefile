@@ -17,11 +17,11 @@ endif
 
 # TARGETS
 
-hist_hash_table.o: $(HASHPATH)/hist_hash_table.F90
+hist_hashable.o: $(HASHPATH)/hist_hashable.F90
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
-hist_hashable.o: $(HASHPATH)/hist_hashable.F90
+hist_hash_table.o: $(HASHPATH)/hist_hash_table.F90
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
@@ -37,7 +37,7 @@ hist_api.o: $(SRCPATH)/hist_api.F90 hist_field.o hist_buffer.o
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
-test_hash_table: test_hash.F90 hist_hashable.o hist_hash_table.o
+test_hash_table: test_hash.F90 $(HASHOBJS)
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 
@@ -48,4 +48,4 @@ test_hist_buffer: test_hist_buffer.F90 hist_hashable.o $(HISTOBJS)
 # CLEAN
 clean:
 	@rm -f *.o *.mod
-	@rm -f test_hash_table, test_hist_buffer
+	@rm -f test_hash_table test_hist_buffer

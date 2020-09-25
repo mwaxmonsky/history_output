@@ -46,12 +46,15 @@ CONTAINS
    !#######################################################################
 
    subroutine hist_new_field(new_field, diag_name_in, std_name_in,            &
-        long_name_in, units_in, errmsg)
+        long_name_in, units_in, type_in, errmsg)
+      use hist_field, only: hist_field_initialize
+
       type(hist_field_info_t), pointer               :: new_field
       character(len=*),                  intent(in)  :: diag_name_in
       character(len=*),                  intent(in)  :: std_name_in
       character(len=*),                  intent(in)  :: long_name_in
       character(len=*),                  intent(in)  :: units_in
+      character(len=*),                  intent(in)  :: type_in
       character(len=*),        optional, intent(out) :: errmsg
 
       integer :: astat
@@ -72,7 +75,7 @@ CONTAINS
       end if
       if (.not. have_error(errmsg)) then
          call hist_field_initialize(new_field, diag_name_in, std_name_in,     &
-              long_name_in, units_in, errmsg)
+              long_name_in, units_in, type_in, errmsg)
          if (have_error(errmsg)) then
             write(errmsg(len_trim(errmsg)+1:), *) ', called from ', subname
          end if
@@ -84,7 +87,7 @@ CONTAINS
    subroutine hist_new_buffer(field, buff_shape, buff_kind, horiz_axis_ind,   &
         accum_type, output_vol, buffer, errmsg, block_ind, block_sizes)
       ! Dummy arguments
-      class(hist_hashable_t), pointer               :: field
+      class(hist_hashable_t), pointer               :: field_base
       integer,                          intent(in)  :: buff_shape(:)
       integer,                          intent(in)  :: buff_kind
       integer,                          intent(in)  :: horiz_axis_ind
@@ -96,39 +99,70 @@ CONTAINS
       integer,                optional, intent(in)  :: block_sizes(:)
 
       ! Local variables
-      integer                     :: rank
-      character(len=8)            :: kind_string
-      character(len=3)            :: accum_string
-      character(len=16)           :: bufftype_string
-      integer,          parameter :: max_rank = 2
-      integer,          parameter :: good_kinds(2) = (/ REAL32, REAL64 /)
-      character(len=*), parameter :: subname = 'hist_new_buffer'
-      character(len=*), parameter :: errhead = subname//' ERROR: '
+      integer                              :: rank
+      character(len=8)                     :: kind_string
+      character(len=3)                     :: accum_string
+      character(len=16)                    :: bufftype_string
+      type(hist_field_info_t), pointer     :: field
+      character(len=:),        allocatable :: type_str
+      integer,                 parameter   :: max_rank = 2
+      character(len=*),        parameter   :: subname = 'hist_new_buffer'
+      character(len=*),        parameter   :: errhead = subname//' ERROR: '
 
       ! Initialize output and local variables
       nullify(buffer)
+      nullify(field)
       if (present(errmsg)) then
          errmsg = ''
       end if
       rank = SIZE(buff_shape, 1)
       !! Some sanity checks
-      ! Check kind
-      if (.not. ANY(good_kinds == buff_kind)) then
-         write(errmsg(len_trim(errmsg)+1:), '(2a,i0,a)') errhead,             &
-              'buff_type, ', buff_kind, ' not supported'
+      ! We can select on the field's type string but not its kind string
+      ! because we do not know the kind value for the kind string
+      select type (field_base)
+      type is (hist_field_info_t)
+         field => field_base
+      class default
+         if (present(errmsg)) then
+            write(errmsg(len_trim(errmsg)+1:), '(2a)') errhead,               &
+                 'Input, <field_base>, is not of type, hist_field_info_t'
+         end if
+      end select
+      if (associated(field)) then
+         type_str = field%type()
+      else
+         type_str = 'unknown'
       end if
-      select case (buff_kind)
-      case (REAL32)
-         kind_string = 'real32'
-      case (REAL64)
-         kind_string = 'real64'
-      case (INT32)
-         kind_string = 'int32'
-      case (INT64)
-         kind_string = 'int64'
+      select case (type_str)
+      case ('integer')
+         select case (buff_kind)
+         case (INT32)
+            kind_string = 'int32'
+         case (INT64)
+            kind_string = 'int64'
+         case default
+            kind_string = ''
+         end select
+      case ('real')
+         select case(buff_kind)
+         case (REAL32)
+            kind_string = 'real32'
+         case (REAL64)
+            kind_string = 'real64'
+         case default
+            kind_string = ''
+         end select
       case default
          kind_string = ''
+         if (present(errmsg)) then
+            write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,               &
+                 "type, '", type_str, ' is not supported'
+         end if
       end select
+      if ((len_trim(kind_string) == 0) .and. present(errmsg)) then
+         write(errmsg(len_trim(errmsg)+1:), '(2a,i0,2a)') errhead,            &
+              "kind = ", buff_kind, " is not supported for type ", type_str
+      end if
       ! Check horiz_axis_ind
       if ((horiz_axis_ind < 1) .or. (horiz_axis_ind > rank)) then
          write(errmsg(len_trim(errmsg)+1:), '(2a,i0,a)') errhead,             &
@@ -172,14 +206,15 @@ CONTAINS
                  "Unknown accumulation operator type, '", trim(accum_type), "'"
          end if
       end select
+      ! We now know what sort of buffer we need
       ! First, sort by rank
       select case (rank)
       case (1)
          ! sort by kind (already checked above)
          if (buff_kind == REAL32) then
-            buffer => buffer_factory('real32_1_')
+            bufftype_string = 'real32_1_'//trim(accum_string)
          else if (buff_kind == REAL64) then
-            buffer => buffer_factory('real64_1_')
+            bufftype_string = 'real64_1_'//trim(accum_string)
          end if
       case default
          ! Over max rank currently handled
@@ -188,6 +223,13 @@ CONTAINS
                  'buffers have a max rank of ', max_rank
          end if
       end select
+      buffer => buffer_factory(trim(bufftype_string))
+      if (associated(buffer)) then
+         call buffer%initialize(output_vol, horiz_axis_ind, buff_shape)
+      else if (present(errmsg)) then
+         write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,                  &
+              'buffer (', trim(bufftype_string), ') not created'
+      end if
 
    end subroutine hist_new_buffer
 
