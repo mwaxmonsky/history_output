@@ -1,10 +1,12 @@
 module hist_buffer
-
-   use ISO_FORTRAN_ENV, only: REAL64, REAL32
+   use ISO_FORTRAN_ENV, only: REAL64, REAL32, INT32, INT64
    use hist_hashable,   only: hist_hashable_t
 
    implicit none
    private
+
+   ! Public interfaces
+   public :: buffer_factory
 
    ! Processing flag indices
    integer, parameter :: hist_proc_last    = 1 ! Save last sample
@@ -44,33 +46,6 @@ module hist_buffer
       procedure :: norm_value => buff_1dreal64_inst_value
    end type hist_buffer_1dreal64_inst_t
 
-!!XXgoldyXX: v debug only
-#if 0
-!!XXgoldyXX: ^ debug only
-   type, public, extends(hist_buffer_t) :: hist_buffer_1dreal_avg_t(bkind)
-      integer, kind        :: bkind
-      integer              :: num_samples = 0
-      real(bkind), pointer :: avg(:) => NULL() ! Running average
-   CONTAINS
-      procedure(hist_buff_clear) :: clear      => buff_1dreal_avg_clear
-      procedure(hist_buff_accum) :: accumulate => buff_1dreal_avg_accum
-      procedure(hist_buff_value) :: norm_value => buff_1dreal_avg_value
-   end type hist_buffer_1dreal_avg_t
-
-   type, public, extends(hist_buffer_t) :: hist_buffer_1dreal_var_t(bkind)
-      integer, kind        :: bkind
-      integer              :: num_samples = 0
-      real(bkind), pointer :: avg(:) => NULL() ! Running average
-      real(bkind), pointer :: var(:) => NULL() ! Running 'variance^2'
-   CONTAINS
-      procedure(hist_buff_clear) :: clear      => buff_1dreal_var_clear
-      procedure(hist_buff_accum) :: accumulate => buff_1dreal_var_accum
-      procedure(hist_buff_value) :: norm_value => buff_1dreal_var_value
-   end type hist_buffer_1dreal_var_t
-!!XXgoldyXX: v debug only
-#endif
-!!XXgoldyXX: ^ debug only
-
    ! Abstract interface for clear procedure of hist_buffer_t class
    abstract interface
       subroutine hist_buff_clear(this)
@@ -78,34 +53,6 @@ module hist_buffer
          class(hist_buffer_t), intent(inout) :: this
       end subroutine hist_buff_clear
    end interface
-
-!!XXgoldyXX: v debug only
-#if 0
-!!XXgoldyXX: ^ debug only
-   ! Abstract interface for accumulate procedure of hist_buffer_t class
-   abstract interface
-      logical function hist_buff_accum_1dreal(this, field, errmsg)
-         import :: hist_buffer_1dreal_t
-
-         class(hist_buffer_1dreal_t(bkind)), intent(inout) :: this
-         real(bkind),                        intent(in)    :: field(:)
-         character(len=*), optional,         intent(out)   :: errmsg
-      end function hist_buff_accum_1dreal
-   end interface
-
-   ! Abstract interface for norm_value procedure of hist_buffer_t class
-   abstract interface
-      subroutine hist_buff_value_1dreal(buffer, norm_val, errmsg)
-         import :: hist_buffer_1dreal_t
-
-         class(hist_buffer_1dreal_t(bkind)), intent(inout) :: buffer
-         real(bkind),                        intent(inout) :: field(:)
-         character(len=*), optional,         intent(out)   :: errmsg
-      end subroutine hist_buff_value
-   end interface
-!!XXgoldyXX: v debug only
-#endif
-!!XXgoldyXX: ^ debug only
 
 CONTAINS
 
@@ -134,31 +81,17 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine buff_1dreal64_inst_clear(this)
-      class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
-
-      this%num_samples = 0
-   end subroutine buff_1dreal64_inst_clear
-
-   !#######################################################################
-
-   logical function buff_1dreal32_inst_accum(this, errmsg) result(accum_ok)
+   subroutine buff_1dreal32_inst_accum(this, field, errmsg)
       class(hist_buffer_1dreal32_inst_t), intent(inout) :: this
+      real(REAL32),                       intent(in)    :: field(:)
       character(len=*), optional,         intent(out)   :: errmsg
 
-      errmsg = 'Not implemented'
-      accum_ok = .false.
-   end function buff_1dreal32_inst_accum
+      if (present(errmsg)) then
+         errmsg = 'Not implemented'
+      end if
+      this%num_samples = 1
 
-   !#######################################################################
-
-   logical function buff_1dreal64_inst_accum(this, errmsg) result(accum_ok)
-      class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
-      character(len=*), optional,         intent(out)   :: errmsg
-
-      errmsg = 'Not implemented'
-      accum_ok = .false.
-   end function buff_1dreal64_inst_accum
+   end subroutine buff_1dreal32_inst_accum
 
    !#######################################################################
 
@@ -167,8 +100,33 @@ CONTAINS
       real(REAL32),                       intent(inout) :: norm_val(:)
       character(len=*), optional,         intent(out)   :: errmsg
 
-      errmsg = 'Not implemented'
+      if (present(errmsg)) then
+         errmsg = 'Not implemented'
+      end if
+
    end subroutine buff_1dreal32_inst_value
+
+   !#######################################################################
+
+   subroutine buff_1dreal64_inst_clear(this)
+      class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
+
+      this%num_samples = 0
+
+   end subroutine buff_1dreal64_inst_clear
+
+   !#######################################################################
+
+   subroutine buff_1dreal64_inst_accum(this, field, errmsg)
+      class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
+      real(REAL64),                       intent(in)    :: field(:)
+      character(len=*), optional,         intent(out)   :: errmsg
+
+      if (present(errmsg)) then
+         errmsg = 'Not implemented'
+      end if
+
+   end subroutine buff_1dreal64_inst_accum
 
    !#######################################################################
 
@@ -177,7 +135,45 @@ CONTAINS
       real(REAL64),                       intent(inout) :: norm_val(:)
       character(len=*), optional,         intent(out)   :: errmsg
 
-      errmsg = 'Not implemented'
+      if (present(errmsg)) then
+         errmsg = 'Not implemented'
+      end if
+
    end subroutine buff_1dreal64_inst_value
+
+   !#######################################################################
+
+   function buffer_factory(buffer_type) result(newbuf)
+      ! Create a new buffer based on <buffer_type>.
+      ! <buffer_type> has a format typekind_rank_accum
+      ! Where:
+      ! <typekind> is a lowercase string representation of a
+      !    supported kind from the ISO_FORTRAN_ENV module.
+      ! <rank> is the rank of the buffer (no leading zeros)
+      ! <accum> is the accumulation type, one of:
+      !    lst: Store the last value collected
+      !    avg: Accumulate running average
+      !    var: Accumulate standard deviation
+      !    min: Accumulate smallest value
+      !    max: Accumulate largest value
+      ! Arguments
+      class(hist_buffer_t), pointer :: newbuf
+      character(len=*), intent(in)  :: buffer_type
+      ! Local variables
+      ! For buffer allocation
+      type(hist_buffer_1dreal32_inst_t), pointer :: real32_1_in => NULL()
+      type(hist_buffer_1dreal64_inst_t), pointer :: real64_1_in => NULL()
+
+
+      ! Create new buffer
+      select case (trim(buffer_type))
+      case ('real32_1_inst')
+         allocate(real32_1_in)
+         newbuf => real32_1_in
+      case ('real64_1_inst')
+         allocate(real64_1_in)
+         newbuf => real64_1_in
+      end select
+   end function buffer_factory
 
 end module hist_buffer

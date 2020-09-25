@@ -7,6 +7,9 @@ FCFLAGS += -g
 SRCPATH = ../src
 HASHPATH = $(SRCPATH)/hash
 
+HASHOBJS = hist_hashable.o hist_hash_table.o
+HISTOBJS = hist_buffer.o hist_field.o hist_api.o
+
 # Make sure we have a log file
 ifeq ($(LOGFILE),)
 LOGFILE := hist_test.log
@@ -22,11 +25,15 @@ hist_hashable.o: $(HASHPATH)/hist_hashable.F90
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
+hist_buffer.o: $(SRCPATH)/hist_buffer.F90 hist_hashable.o
+	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
+	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
+
 hist_field.o: $(SRCPATH)/hist_field.F90 hist_buffer.o hist_hashable.o
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
-hist_buffer.o: $(SRCPATH)/hist_buffer.F90 hist_hashable.o
+hist_api.o: $(SRCPATH)/hist_api.F90 hist_field.o hist_buffer.o
 	@echo "${FC} -c ${FCFLAGS} ${INCPATH} $^" 2>&1 >> $(LOGFILE)
 	@${FC} -c ${FCFLAGS} ${INCPATH} $^ 2>&1 >> $(LOGFILE)
 
@@ -34,7 +41,7 @@ test_hash_table: test_hash.F90 hist_hashable.o hist_hash_table.o
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 
-test_hist_buffer: test_hist_buffer.F90 hist_hashable.o hist_buffer.o hist_field.o
+test_hist_buffer: test_hist_buffer.F90 hist_hashable.o $(HISTOBJS)
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 

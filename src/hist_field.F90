@@ -7,7 +7,7 @@ module hist_field
    implicit none
    private
 
-   public :: hist_new_field ! Allocate a hist_field_info_t object
+   public :: hist_field_initialize
    public :: hist_get_field ! Get field from a buffer
 
    type, public, extends(hist_hashable_t) :: hist_field_info_t
@@ -39,23 +39,24 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine hist_new_field(new_field, diag_name_in, std_name_in,            &
-        long_name_in, units_in)
-      type(hist_field_info_t), pointer :: new_field
-      character(len=*), intent(in)     :: diag_name_in
-      character(len=*), intent(in)     :: std_name_in
-      character(len=*), intent(in)     :: long_name_in
-      character(len=*), intent(in)     :: units_in
+   subroutine hist_field_initialize(field, diag_name_in, std_name_in,         &
+        long_name_in, units_in, errmsg)
 
-      if (associated(new_field)) then
-         deallocate(new_field)
+      type(hist_field_info_t), pointer               :: field
+      character(len=*),                  intent(in)  :: diag_name_in
+      character(len=*),                  intent(in)  :: std_name_in
+      character(len=*),                  intent(in)  :: long_name_in
+      character(len=*),                  intent(in)  :: units_in
+      character(len=*),        optional, intent(out) :: errmsg
+
+      if (present(errmsg)) then
+         errmsg = ''
       end if
-      allocate(new_field)
-      new_field%diag_name = diag_name_in
-      new_field%standard_name = std_name_in
-      new_field%long_name = long_name_in
-      new_field%units = units_in
-   end subroutine hist_new_field
+      field%diag_name = diag_name_in
+      field%standard_name = std_name_in
+      field%long_name = long_name_in
+      field%units = units_in
+   end subroutine hist_field_initialize
 
    !#######################################################################
 
@@ -64,6 +65,7 @@ CONTAINS
       class(hist_buffer_t), intent(in) :: buffer
       type(hist_field_info_t), pointer :: field
 
+      nullify(field)
       select type(finfo => buffer%field_info)
          type is (hist_field_info_t)
             field => finfo
