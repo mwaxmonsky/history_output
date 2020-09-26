@@ -1,6 +1,7 @@
 module hist_api
 
    use ISO_FORTRAN_ENV, only: REAL64, REAL32, INT32, INT64
+   use hist_utils,      only: hist_error_messages
    use hist_hashable,   only: hist_hashable_t
    use hist_field,      only: hist_field_info_t
    use hist_buffer,     only: hist_buffer_t, buffer_factory
@@ -33,77 +34,72 @@ CONTAINS
 
    !#######################################################################
 
-   logical function have_error(errmsg)
-      ! Return .true. iff <errmsg> is present and contains text
-      character(len=*), optional, intent(in) :: errmsg
+   logical function have_error(errors)
+      ! Return .true. iff <errors> is present and contains error messages
+      type(hist_error_messages), optional, intent(inout) :: errors
 
-      have_error = present(errmsg)
+      have_error = present(errors)
       if (have_error) then
-         have_error = len_trim(errmsg) > 0
+         have_error = errors%num_errors() > 0
       end if
    end function have_error
 
    !#######################################################################
 
-   subroutine hist_new_field(new_field, diag_name_in, std_name_in,            &
-        long_name_in, units_in, type_in, errmsg)
+   function hist_new_field(diag_name_in, std_name_in, long_name_in, units_in, &
+        type_in, errors) result(new_field)
       use hist_field, only: hist_field_initialize
 
-      type(hist_field_info_t), pointer               :: new_field
-      character(len=*),                  intent(in)  :: diag_name_in
-      character(len=*),                  intent(in)  :: std_name_in
-      character(len=*),                  intent(in)  :: long_name_in
-      character(len=*),                  intent(in)  :: units_in
-      character(len=*),                  intent(in)  :: type_in
-      character(len=*),        optional, intent(out) :: errmsg
+      type(hist_field_info_t),   pointer                 :: new_field
+      character(len=*),                    intent(in)    :: diag_name_in
+      character(len=*),                    intent(in)    :: std_name_in
+      character(len=*),                    intent(in)    :: long_name_in
+      character(len=*),                    intent(in)    :: units_in
+      character(len=*),                    intent(in)    :: type_in
+      type(hist_error_messages), optional, intent(inout) :: errors
 
-      integer :: astat
+      integer                     :: astat
+      character(len=128)          :: errmsg
       character(len=*), parameter :: subname = 'hist_new_field'
 
-      errmsg = ''
-      if (associated(new_field)) then
-         deallocate(new_field, stat=astat)
-         if ((astat /= 0) .and. present(errmsg)) then
-            write(errmsg, *) subname, ' Unable to deallocate <new_field>'
-         end if
-      end if
-      if (.not. have_error(errmsg)) then
+      if (.not. have_error(errors)) then
          allocate(new_field, stat=astat)
-         if ((astat /= 0) .and. present(errmsg)) then
-            write(errmsg, *) subname, ' Unable to allocate <new_field>'
+         if ((astat /= 0) .and. present(errors)) then
+            call errors%new_error(subname//' Unable to allocate <new_field>')
          end if
       end if
-      if (.not. have_error(errmsg)) then
+      if (.not. have_error(errors)) then
          call hist_field_initialize(new_field, diag_name_in, std_name_in,     &
               long_name_in, units_in, type_in, errmsg)
-         if (have_error(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), *) ', called from ', subname
+         if (len_trim(errmsg) > 0) then
+            call errors%new_error(', called from '//subname)
          end if
       end if
-   end subroutine hist_new_field
+   end function hist_new_field
 
    !#######################################################################
 
    subroutine hist_new_buffer(field, buff_shape, buff_kind, horiz_axis_ind,   &
-        accum_type, output_vol, buffer, errmsg, block_ind, block_sizes)
+        accum_type, output_vol, buffer, errors, block_ind, block_sizes)
       ! Dummy arguments
-      class(hist_hashable_t), pointer               :: field_base
-      integer,                          intent(in)  :: buff_shape(:)
-      integer,                          intent(in)  :: buff_kind
-      integer,                          intent(in)  :: horiz_axis_ind
-      character(len=*),                 intent(in)  :: accum_type
-      integer,                          intent(in)  :: output_vol
-      class(hist_buffer_t),   pointer,  intent(out) :: buffer
-      character(len=*),       optional, intent(out) :: errmsg
-      integer,                optional, intent(in)  :: block_ind
-      integer,                optional, intent(in)  :: block_sizes(:)
+      class(hist_field_info_t),  pointer                 :: field
+      integer,                             intent(in)    :: buff_shape(:)
+      integer,                             intent(in)    :: buff_kind
+      integer,                             intent(in)    :: horiz_axis_ind
+      character(len=*),                    intent(in)    :: accum_type
+      integer,                             intent(in)    :: output_vol
+      class(hist_buffer_t),      pointer,  intent(out)   :: buffer
+      type(hist_error_messages), optional, intent(inout) :: errors
+      integer,                   optional, intent(in)    :: block_ind
+      integer,                   optional, intent(in)    :: block_sizes(:)
 
       ! Local variables
       integer                              :: rank
       character(len=8)                     :: kind_string
       character(len=3)                     :: accum_string
       character(len=16)                    :: bufftype_string
-      type(hist_field_info_t), pointer     :: field
+      class(hist_hashable_t),  pointer     :: field_base
+      class(hist_buffer_t),    pointer     :: buff_ptr
       character(len=:),        allocatable :: type_str
       integer,                 parameter   :: max_rank = 2
       character(len=*),        parameter   :: subname = 'hist_new_buffer'
@@ -111,23 +107,12 @@ CONTAINS
 
       ! Initialize output and local variables
       nullify(buffer)
-      nullify(field)
-      if (present(errmsg)) then
-         errmsg = ''
-      end if
+      nullify(field_base)
+      nullify(buff_ptr)
       rank = SIZE(buff_shape, 1)
       !! Some sanity checks
       ! We can select on the field's type string but not its kind string
       ! because we do not know the kind value for the kind string
-      select type (field_base)
-      type is (hist_field_info_t)
-         field => field_base
-      class default
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a)') errhead,               &
-                 'Input, <field_base>, is not of type, hist_field_info_t'
-         end if
-      end select
       if (associated(field)) then
          type_str = field%type()
       else
@@ -154,38 +139,38 @@ CONTAINS
          end select
       case default
          kind_string = ''
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,               &
-                 "type, '", type_str, ' is not supported'
+         if (present(errors)) then
+            call errors%new_error(errhead//"type, '"//type_str,               &
+                 errstr2="' is not supported")
          end if
       end select
-      if ((len_trim(kind_string) == 0) .and. present(errmsg)) then
-         write(errmsg(len_trim(errmsg)+1:), '(2a,i0,2a)') errhead,            &
-              "kind = ", buff_kind, " is not supported for type ", type_str
+      if ((len_trim(kind_string) == 0) .and. present(errors)) then
+         call errors%new_error(errhead//"kind = ", errint1=buff_kind,         &
+              errstr2=" is not supported for type "//type_str)
       end if
       ! Check horiz_axis_ind
       if ((horiz_axis_ind < 1) .or. (horiz_axis_ind > rank)) then
-         write(errmsg(len_trim(errmsg)+1:), '(2a,i0,a)') errhead,             &
-              'horiz_axis_ind outside of valid range, [1, ', rank, ']'
+         call errors%new_error(errhead//'horiz_axis_ind outside of ',         &
+              errstr2='valid range, [1, ', errint2=rank, errstr3=']')
       end if
       ! Check for (proper) block structured buffer
       if (present(block_ind) .and. present(block_sizes)) then
          if ((block_ind < 1) .or. (block_ind > rank)) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a,i0,a)') errhead,          &
-                 'block_ind outside of valid range, [1, ', rank, ']'
+            call errors%new_error(errhead//'block_ind outside of ',           &
+                 errstr2='valid range, [1, ', errint2=rank, errstr3=']')
          else if (block_ind == horiz_axis_ind) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a)') errhead,               &
-                 'block_ind cannot be the same as horiz_axis_ind'
+            call errors%new_error(errhead//'block_ind cannot be the same ',   &
+                 errstr2='as horiz_axis_ind')
          end if
       else if (present(block_ind)) then
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a)') errhead,               &
-                 'block_sizes required if block_ind is present'
+         if (present(errors)) then
+            call errors%new_error(errhead,                                    &
+                 errstr2='block_sizes required if block_ind is present')
          end if
       else if (present(block_sizes)) then
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a)') errhead,               &
-                 'block_ind required if block_sizes is present'
+         if (present(errors)) then
+            call errors%new_error(errhead,                                   &
+                 errstr2='block_ind required if block_sizes is present')
          end if
       end if ! No else, we just do not have a blocked buffer
       ! Check accumulation type
@@ -201,9 +186,9 @@ CONTAINS
       case ('S', 's', 'var')
          accum_string = 'var'
       case default
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,               &
-                 "Unknown accumulation operator type, '", trim(accum_type), "'"
+         if (present(errors)) then
+            call errors%new_error(errhead//"Unknown accumulation operator",   &
+                 errstr2=" type, '"//trim(accum_type)//"'")
          end if
       end select
       ! We now know what sort of buffer we need
@@ -218,18 +203,27 @@ CONTAINS
          end if
       case default
          ! Over max rank currently handled
-         if (present(errmsg)) then
-            write(errmsg(len_trim(errmsg)+1:), '(2a,i0)') errhead,            &
-                 'buffers have a max rank of ', max_rank
+         if (present(errors)) then
+            call errors%new_error(errhead//'buffers have a max rank of ',     &
+                 errint1=max_rank)
          end if
       end select
       buffer => buffer_factory(trim(bufftype_string))
       if (associated(buffer)) then
+         field_base => field
          call buffer%initialize(field_base, output_vol, horiz_axis_ind,       &
               buff_shape, block_sizes, block_ind)
-      else if (present(errmsg)) then
-         write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,                  &
-              'buffer (', trim(bufftype_string), ') not created'
+         ! Add this buffer to its field (field should be there if buffer is)
+         if (associated(field%buffers)) then
+            buff_ptr => field%buffers
+            field%buffers => buffer
+            buffer%next => buff_ptr
+         else
+            field%buffers => buffer
+         end if
+      else if (present(errors)) then
+         call errors%new_error(errhead//'buffer ('//trim(bufftype_string),    &
+              errstr2=') not created')
       end if
 
    end subroutine hist_new_buffer

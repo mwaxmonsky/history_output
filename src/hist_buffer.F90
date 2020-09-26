@@ -8,12 +8,6 @@ module hist_buffer
    ! Public interfaces
    public :: buffer_factory
 
-   ! Processing flag indices
-   integer, parameter :: hist_proc_last    = 1 ! Save last sample
-   integer, parameter :: hist_proc_average = 2 ! Average samples
-   integer, parameter :: hist_proc_stddev  = 3 ! Standard deviation of samples
-   integer, parameter :: hist_proc_min     = 4 ! Minimum of samples
-   integer, parameter :: hist_proc_max     = 5 ! Maximum of samples
    ! Time sampling flag indices
    !!XXgoldyXX: Todo: decide on sampling types
 
@@ -72,8 +66,8 @@ module hist_buffer
          integer,              intent(in)    :: volume_in
          integer,              intent(in)    :: horiz_axis_in
          integer,              intent(in)    :: shape_in(:)
-         integer,              intent(in)    :: block_sizes_in(:)
-         integer,              intent(in)    :: block_ind_in
+         integer,    optional, intent(in)    :: block_sizes_in(:)
+         integer,    optional, intent(in)    :: block_ind_in
       end subroutine hist_buff_init
    end interface
 
@@ -110,8 +104,8 @@ CONTAINS
       class(hist_hashable_t), pointer     :: field_in
       integer,              intent(in)    :: volume_in
       integer,              intent(in)    :: horiz_axis_in
-      integer,              intent(in)    :: block_sizes_in(:)
-      integer,              intent(in)    :: block_ind_in
+      integer,    optional, intent(in)    :: block_sizes_in(:)
+      integer,    optional, intent(in)    :: block_ind_in
 
       this%field_info => field_in
       this%vol = volume_in
@@ -144,8 +138,8 @@ CONTAINS
       integer,                            intent(in)    :: volume_in
       integer,                            intent(in)    :: horiz_axis_in
       integer,                            intent(in)    :: shape_in(:)
-      integer,                            intent(in)    :: block_sizes_in(:)
-      integer,                            intent(in)    :: block_ind_in
+      integer, optional,                  intent(in)    :: block_sizes_in(:)
+      integer, optional,                  intent(in)    :: block_ind_in
 
       call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
            block_sizes_in, block_ind_in)
@@ -199,8 +193,8 @@ CONTAINS
       integer,                            intent(in)    :: volume_in
       integer,                            intent(in)    :: horiz_axis_in
       integer,                            intent(in)    :: shape_in(:)
-      integer,                            intent(in)    :: block_sizes_in(:)
-      integer,                            intent(in)    :: block_ind_in
+      integer, optional,                  intent(in)    :: block_sizes_in(:)
+      integer, optional,                  intent(in)    :: block_ind_in
 
       call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
            block_sizes_in, block_ind_in)
@@ -259,12 +253,13 @@ CONTAINS
       type(hist_buffer_1dreal64_inst_t), pointer :: real64_1_in => NULL()
 
 
+      nullify(newbuf)
       ! Create new buffer
       select case (trim(buffer_type))
-      case ('real32_1_inst')
+      case ('real32_1_lst')
          allocate(real32_1_in)
          newbuf => real32_1_in
-      case ('real64_1_inst')
+      case ('real64_1_lst')
          allocate(real64_1_in)
          newbuf => real64_1_in
       end select
