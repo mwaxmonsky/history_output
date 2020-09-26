@@ -225,7 +225,8 @@ CONTAINS
       end select
       buffer => buffer_factory(trim(bufftype_string))
       if (associated(buffer)) then
-         call buffer%initialize(output_vol, horiz_axis_ind, buff_shape)
+         call buffer%initialize(field_base, output_vol, horiz_axis_ind,       &
+              buff_shape, block_sizes, block_ind)
       else if (present(errmsg)) then
          write(errmsg(len_trim(errmsg)+1:), '(4a)') errhead,                  &
               'buffer (', trim(bufftype_string), ') not created'

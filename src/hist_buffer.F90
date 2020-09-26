@@ -19,17 +19,19 @@ module hist_buffer
 
    type, abstract, public :: hist_buffer_t
       ! hist_buffer_t is an abstract base class for hist_outfld buffers
-      class(hist_hashable_t), pointer          :: field_info => NULL()
-      integer,                         private :: vol = -1 ! For host output
-      integer,                         private :: horiz_axis_ind = 0
-      class(hist_buffer_t),   pointer          :: next
+      class(hist_hashable_t), pointer              :: field_info => NULL()
+      integer,                             private :: vol = -1 ! For host output
+      integer,                             private :: horiz_axis_ind = 0
+      character(len=:),       allocatable, private :: accum_str
+      class(hist_buffer_t),   pointer              :: next
    contains
-      procedure                            :: field  => get_field_info
-      procedure                            :: volume => get_volume
-      procedure                            :: horiz_axis_index
-      procedure                            :: init_buffer
-      procedure(hist_buff_init),  deferred :: initialize
-      procedure(hist_buff_clear), deferred :: clear
+      procedure                                 :: field  => get_field_info
+      procedure                                 :: volume => get_volume
+      procedure                                 :: horiz_axis_index
+      procedure                                 :: init_buffer
+      procedure                                 :: accum_string
+      procedure(hist_buff_init),       deferred :: initialize
+      procedure(hist_buff_sub_noargs), deferred :: clear
    end type hist_buffer_t
 
    type, public, extends(hist_buffer_t) :: hist_buffer_1dreal32_inst_t
@@ -54,19 +56,24 @@ module hist_buffer
 
    ! Abstract interfaces for hist_buffer_t class
    abstract interface
-      subroutine hist_buff_clear(this)
+      subroutine hist_buff_sub_noargs(this)
          import :: hist_buffer_t
          class(hist_buffer_t), intent(inout) :: this
-      end subroutine hist_buff_clear
+      end subroutine hist_buff_sub_noargs
    end interface
 
    abstract interface
-      subroutine hist_buff_init(this, volume_in, horiz_axis_in, shape_in)
+      subroutine hist_buff_init(this, field_in, volume_in, horiz_axis_in,     &
+           shape_in, block_sizes_in, block_ind_in)
          import :: hist_buffer_t
+         import :: hist_hashable_t
          class(hist_buffer_t), intent(inout) :: this
+         class(hist_hashable_t), pointer     :: field_in
          integer,              intent(in)    :: volume_in
          integer,              intent(in)    :: horiz_axis_in
          integer,              intent(in)    :: shape_in(:)
+         integer,              intent(in)    :: block_sizes_in(:)
+         integer,              intent(in)    :: block_ind_in
       end subroutine hist_buff_init
    end interface
 
@@ -97,14 +104,28 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine init_buffer(this, volume_in, horiz_axis_in)
+   subroutine init_buffer(this, field_in, volume_in, horiz_axis_in,           &
+        block_sizes_in, block_ind_in)
       class(hist_buffer_t), intent(inout) :: this
+      class(hist_hashable_t), pointer     :: field_in
       integer,              intent(in)    :: volume_in
       integer,              intent(in)    :: horiz_axis_in
+      integer,              intent(in)    :: block_sizes_in(:)
+      integer,              intent(in)    :: block_ind_in
 
+      this%field_info => field_in
       this%vol = volume_in
       this%horiz_axis_ind = horiz_axis_in
    end subroutine init_buffer
+
+   !#######################################################################
+
+   function accum_string(this) result(ac_str)
+      class(hist_buffer_t), intent(in) :: this
+      character(len=:), allocatable    :: ac_str
+
+      ac_str = this%accum_str
+   end function accum_string
 
    !#######################################################################
 
@@ -116,13 +137,19 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine init_buff_1dreal32(this, volume_in, horiz_axis_in, shape_in)
+   subroutine init_buff_1dreal32(this, field_in, volume_in, horiz_axis_in, &
+        shape_in, block_sizes_in, block_ind_in)
       class(hist_buffer_1dreal32_inst_t), intent(inout) :: this
+      class(hist_hashable_t), pointer                   :: field_in
       integer,                            intent(in)    :: volume_in
       integer,                            intent(in)    :: horiz_axis_in
       integer,                            intent(in)    :: shape_in(:)
+      integer,                            intent(in)    :: block_sizes_in(:)
+      integer,                            intent(in)    :: block_ind_in
 
-      call init_buffer(this, volume_in, horiz_axis_in)
+      call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
+           block_sizes_in, block_ind_in)
+      this%accum_str = 'last sampled value'
       allocate(this%data(shape_in(1)))
 
    end subroutine init_buff_1dreal32
@@ -165,13 +192,19 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine init_buff_1dreal64(this, volume_in, horiz_axis_in, shape_in)
+   subroutine init_buff_1dreal64(this, field_in, volume_in, horiz_axis_in,    &
+        shape_in, block_sizes_in, block_ind_in)
       class(hist_buffer_1dreal64_inst_t), intent(inout) :: this
+      class(hist_hashable_t), pointer                   :: field_in
       integer,                            intent(in)    :: volume_in
       integer,                            intent(in)    :: horiz_axis_in
       integer,                            intent(in)    :: shape_in(:)
+      integer,                            intent(in)    :: block_sizes_in(:)
+      integer,                            intent(in)    :: block_ind_in
 
-      call init_buffer(this, volume_in, horiz_axis_in)
+      call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
+           block_sizes_in, block_ind_in)
+      this%accum_str = 'last sampled value'
       allocate(this%data(shape_in(1)))
 
    end subroutine init_buff_1dreal64

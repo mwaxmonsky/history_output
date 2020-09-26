@@ -41,7 +41,7 @@ test_hash_table: test_hash.F90 $(HASHOBJS)
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 
-test_hist_buffer: test_hist_buffer.F90 hist_hashable.o $(HISTOBJS)
+test_hist_buffer: test_hist_buffer.F90 $(HISTOBJS) hist_hashable.o
 	@echo "${FC} ${FCFLAGS} ${INCPATH} -o $@ $^" 2>&1 >> $(LOGFILE)
 	@${FC} ${FCFLAGS} ${INCPATH} -o $@ $^ 2>&1 >> $(LOGFILE)
 
