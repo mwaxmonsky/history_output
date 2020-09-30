@@ -5,7 +5,7 @@ program test_hist_buffer
    use hist_buffer,      only: hist_buffer_t
    use hist_field,       only: hist_field_info_t, hist_get_field
    use hist_api,         only: hist_new_field, hist_new_buffer
-   use hist_api,         only: hist_buffer_accumulate, hist_buffer_norm_value
+   use hist_api,         only: hist_field_accumulate, hist_buffer_norm_value
 
    implicit none
 
@@ -26,11 +26,11 @@ program test_hist_buffer
         'm s-1', 'real', errors=errors)
    my_fields%next => hist_new_field('T', 'temperature', 'Temperature',        &
         'K', 'real', errors=errors)
-   fld_ptr => my_fields%next
    call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'lst', 1,       &
         buffer, errors=errors)
    call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'avg', 1,       &
         buffer, errors=errors)
+   fld_ptr => my_fields%next
    call hist_new_buffer(fld_ptr, (/ num_cols /), REAL64, 1, 'lst', 1,         &
         buffer, errors=errors)
    ! Put some data into the buffers
@@ -40,27 +40,17 @@ program test_hist_buffer
    end do
    ! Do some accumulation
    do index = 1, 2
-      buff_ptr => my_fields%buffers
-      do
-         if (associated(buff_ptr) .and. (errors%num_errors() == 0)) then
-            call hist_buffer_accumulate(buff_ptr, field32, 1, logger=errors)
-            if (errors%num_errors() > 0) then
-               call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,    &
-                    subname='my_fields accumulate')
-               exit
-            else
-               buff_ptr => buff_ptr%next
-            end if
-         else
-            exit
-         end if
-      end do
-      buff_ptr => fld_ptr%buffers
-      if (associated(buff_ptr) .and. (errors%num_errors() == 0)) then
-         call hist_buffer_accumulate(buff_ptr, field64, 1, logger=errors)
+      if (errors%num_errors() == 0) then
+         call hist_field_accumulate(my_fields, field32, 1, logger=errors)
          if (errors%num_errors() > 0) then
-            call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,    &
-                 subname='my_fields accumulate')
+            call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 2,       &
+                 subname='my_fields32 accumulate')
+         else
+            call hist_field_accumulate(fld_ptr, field64, 1, logger=errors)
+            if (errors%num_errors() > 0) then
+               call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 2,    &
+                    subname='my_fields64 accumulate')
+            end if
          end if
       end if
       field32(:) = field32(:) * 2.0_real32
@@ -112,7 +102,7 @@ program test_hist_buffer
    buff_ptr => fld_ptr%buffers
    call hist_buffer_norm_value(buff_ptr, field64, logger=errors)
    if (errors%num_errors() > 0) then
-      call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,             &
+      call  errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 2,             &
            subname='my_fields accumulate')
    else
       ! Check answers
@@ -122,7 +112,7 @@ program test_hist_buffer
             if (field64(index) /= test_val64) then
                write(errmsg, '(a,i0,2(a,f8.3))') 'field(', index,             &
                     ') = ', field64(index), ' /= ', test_val64
-               call hist_add_error('hist_buff_1dreal32_lst_t check',          &
+               call hist_add_error('hist_buff_1dreal64_lst_t check',          &
                     trim(errmsg), errors=errors)
             end if
          end do

@@ -23,11 +23,11 @@ module hist_field
       class(hist_buffer_t),    pointer :: buffers => NULL()
    contains
       procedure :: key           => hist_field_info_get_key
-      procedure :: diag_name     => field_get_diag_name
-      procedure :: standard_name => field_get_standard_name
-      procedure :: long_name     => field_get_long_name
-      procedure :: units         => field_get_units
-      procedure :: type          => field_get_type
+      procedure :: diag_name     => get_diag_name
+      procedure :: standard_name => get_standard_name
+      procedure :: long_name     => get_long_name
+      procedure :: units         => get_units
+      procedure :: type          => get_type
       final     :: finalize_field
    end type hist_field_info_t
 
@@ -82,48 +82,48 @@ CONTAINS
 
    !#######################################################################
 
-   function field_get_diag_name(this) result(info)
+   function get_diag_name(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
 
       info = this%diag_file_name
-   end function field_get_diag_name
+   end function get_diag_name
 
    !#######################################################################
 
-   function field_get_standard_name(this) result(info)
+   function get_standard_name(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
 
       info = this%field_standard_name
-   end function field_get_standard_name
+   end function get_standard_name
 
    !#######################################################################
 
-   function field_get_long_name(this) result(info)
+   function get_long_name(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
 
       info = this%field_long_name
-   end function field_get_long_name
+   end function get_long_name
 
    !#######################################################################
 
-   function field_get_units(this) result(info)
+   function get_units(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
 
       info = this%field_units
-   end function field_get_units
+   end function get_units
 
    !#######################################################################
 
-   function field_get_type(this) result(info)
+   function get_type(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
 
       info = this%field_type
-   end function field_get_type
+   end function get_type
 
    !#######################################################################
 

@@ -1,9 +1,6 @@
 module hist_api
 
    use ISO_FORTRAN_ENV, only: REAL64, REAL32, INT32, INT64
-   use hist_hashable,   only: hist_hashable_t
-   use hist_field,      only: hist_field_info_t
-   use hist_buffer,     only: hist_buffer_t, buffer_factory
    use hist_buffer,     only: hist_buff_1dreal32_lst_t
    use hist_buffer,     only: hist_buff_1dreal64_lst_t
 
@@ -13,12 +10,18 @@ module hist_api
    ! Public API interfaces
    public :: hist_new_field         ! Allocate a hist_field_info_t object
    public :: hist_new_buffer        ! Create a new field buffer
+   public :: hist_field_accumulate  ! Accumulate a new field state in all buffs
    public :: hist_buffer_accumulate ! Accumulate a new field state
    public :: hist_buffer_norm_value ! Return current normalized field state
 !   public :: hist_buffer_clear      ! Clear buffer accumulation state
 !   public :: hist_buffer_accum_type ! String value of accumulation type
 
    ! Interfaces for public interfaces
+   interface hist_field_accumulate
+      module procedure hist_field_accumulate_1dreal32
+      module procedure hist_field_accumulate_1dreal64
+   end interface hist_field_accumulate
+
    interface hist_buffer_accumulate
       module procedure hist_buffer_accumulate_1dreal32
       module procedure hist_buffer_accumulate_1dreal64
@@ -36,7 +39,7 @@ CONTAINS
    function hist_new_field(diag_name_in, std_name_in, long_name_in, units_in, &
         type_in, errors) result(new_field)
       use hist_msg_handler, only: hist_have_error, hist_log_messages, ERROR
-      use hist_field,       only: hist_field_initialize
+      use hist_field,       only: hist_field_initialize, hist_field_info_t
 
       type(hist_field_info_t), pointer                 :: new_field
       character(len=*),                  intent(in)    :: diag_name_in
@@ -50,16 +53,16 @@ CONTAINS
       character(len=128)          :: errmsg
       character(len=*), parameter :: subname = 'hist_new_field'
 
-      if (.not. hist_have_error(errors)) then
+      if (.not. hist_have_error(errors=errors)) then
          allocate(new_field, stat=astat)
          if ((astat /= 0) .and. present(errors)) then
             call errors%new_error(subname//' Unable to allocate <new_field>')
          end if
       end if
-      if (.not. hist_have_error(errors)) then
+      if (.not. hist_have_error(errors=errors)) then
          call hist_field_initialize(new_field, diag_name_in, std_name_in,     &
               long_name_in, units_in, type_in, errmsg)
-         if (hist_have_error(errors)) then
+         if (hist_have_error(errors=errors)) then
             call errors%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,        &
                  subname=subname)
          end if
@@ -72,6 +75,9 @@ CONTAINS
         accum_type, output_vol, buffer, errors, block_ind, block_sizes)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
       use hist_msg_handler, only: hist_add_alloc_error, ERROR
+      use hist_hashable,    only: hist_hashable_t
+      use hist_buffer,      only: hist_buffer_t, buffer_factory
+      use hist_field,       only: hist_field_info_t
 
       ! Dummy arguments
       class(hist_field_info_t), pointer                 :: field
@@ -220,9 +226,93 @@ CONTAINS
 
    !#######################################################################
 
+   subroutine hist_field_accumulate_1dreal32(field, data, cols_or_block,      &
+        cole, logger)
+      use hist_msg_handler, only: hist_log_messages, hist_have_error, ERROR
+      use hist_msg_handler, only: hist_add_message, VERBOSE
+      use hist_field,       only: hist_field_info_t
+      use hist_buffer,      only: hist_buffer_t
+
+      ! Dummy arguments
+      class(hist_field_info_t),           intent(inout) :: field
+      real(REAL32),                       intent(in)    :: data(:)
+      integer,                            intent(in)    :: cols_or_block
+      integer,                  optional, intent(in)    :: cole
+      type(hist_log_messages),  optional, intent(inout) :: logger
+      ! Local variables
+      class(hist_buffer_t), pointer     :: buff_ptr
+      character(len=:),     allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_field_accumulate_1dreal32'
+
+      buff_ptr => field%buffers
+      do
+         if (associated(buff_ptr) .and.                                       &
+              (.not. hist_have_error(errors=logger))) then
+            call hist_buffer_accumulate(buff_ptr, data, cols_or_block,        &
+                 cole=cole, logger=logger)
+            if (hist_have_error(errors=logger)) then
+               call  logger%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,    &
+                    subname=subname)
+               exit
+            else
+               call hist_add_message(subname, VERBOSE,                        &
+                    "Accumulated data for", msgstr2=trim(field%diag_name()),  &
+                    msgstr3=", Buffer type, "//trim(buff_ptr%buffer_type()),  &
+                    logger=logger)
+               buff_ptr => buff_ptr%next
+            end if
+         else
+            exit
+         end if
+      end do
+
+   end subroutine hist_field_accumulate_1dreal32
+
+   !#######################################################################
+
+   subroutine hist_field_accumulate_1dreal64(field, data, cols_or_block,      &
+        cole, logger)
+      use hist_msg_handler, only: hist_log_messages, hist_have_error, ERROR
+      use hist_field,       only: hist_field_info_t
+      use hist_buffer,      only: hist_buffer_t
+
+      ! Dummy arguments
+      class(hist_field_info_t), target,   intent(inout) :: field
+      real(REAL64),                       intent(in)    :: data(:)
+      integer,                            intent(in)    :: cols_or_block
+      integer,                  optional, intent(in)    :: cole
+      type(hist_log_messages),  optional, intent(inout) :: logger
+      ! Local variables
+      class(hist_buffer_t), pointer     :: buff_ptr
+      character(len=:),     allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_field_accumulate_1dreal64'
+
+      buff_ptr => field%buffers
+      do
+         if (associated(buff_ptr) .and.                                       &
+              (.not. hist_have_error(errors=logger))) then
+            call hist_buffer_accumulate(buff_ptr, data, cols_or_block,        &
+                 cole=cole, logger=logger)
+            if (hist_have_error(errors=logger)) then
+               call  logger%add_stack_frame(ERROR, __FILE__, __LINE__ - 3,    &
+                    subname=subname)
+               exit
+            else
+               buff_ptr => buff_ptr%next
+            end if
+         else
+            exit
+         end if
+      end do
+
+   end subroutine hist_field_accumulate_1dreal64
+
+   !#######################################################################
+
    subroutine hist_buffer_accumulate_1dreal32(buffer, field, cols_or_block,   &
         cole, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
+      use hist_buffer,      only: hist_buffer_t
 
       ! Dummy arguments
       class(hist_buffer_t),    target,   intent(inout) :: buffer
@@ -258,6 +348,7 @@ CONTAINS
    subroutine hist_buffer_accumulate_1dreal64(buffer, field, cols_or_block,   &
         cole, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
+      use hist_buffer,      only: hist_buffer_t
 
       ! Dummy arguments
       class(hist_buffer_t),    target,   intent(inout) :: buffer
@@ -293,6 +384,7 @@ CONTAINS
    subroutine hist_buffer_norm_value_1dreal32(buffer, norm_val, default_val,  &
         logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
+      use hist_buffer,      only: hist_buffer_t
 
       ! Dummy arguments
       class(hist_buffer_t),    target,   intent(inout) :: buffer
@@ -335,6 +427,7 @@ CONTAINS
    subroutine hist_buffer_norm_value_1dreal64(buffer, norm_val, default_val,  &
       logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
+      use hist_buffer,      only: hist_buffer_t
 
       ! Dummy arguments
       class(hist_buffer_t),    target,   intent(inout) :: buffer
