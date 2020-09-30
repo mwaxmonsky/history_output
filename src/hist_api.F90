@@ -1,11 +1,11 @@
 module hist_api
 
-   use ISO_FORTRAN_ENV,  only: REAL64, REAL32, INT32, INT64
-   use hist_hashable,    only: hist_hashable_t
-   use hist_field,       only: hist_field_info_t
-   use hist_buffer,      only: hist_buffer_t, buffer_factory
-   use hist_buffer,      only: hist_buff_1dreal32_lst_t
-   use hist_buffer,      only: hist_buff_1dreal64_lst_t
+   use ISO_FORTRAN_ENV, only: REAL64, REAL32, INT32, INT64
+   use hist_hashable,   only: hist_hashable_t
+   use hist_field,      only: hist_field_info_t
+   use hist_buffer,     only: hist_buffer_t, buffer_factory
+   use hist_buffer,     only: hist_buff_1dreal32_lst_t
+   use hist_buffer,     only: hist_buff_1dreal64_lst_t
 
    implicit none
    private
@@ -14,7 +14,7 @@ module hist_api
    public :: hist_new_field         ! Allocate a hist_field_info_t object
    public :: hist_new_buffer        ! Create a new field buffer
    public :: hist_buffer_accumulate ! Accumulate a new field state
-!   public :: hist_buffer_norm_value ! Return current normalized field state
+   public :: hist_buffer_norm_value ! Return current normalized field state
 !   public :: hist_buffer_clear      ! Clear buffer accumulation state
 !   public :: hist_buffer_accum_type ! String value of accumulation type
 
@@ -24,10 +24,10 @@ module hist_api
       module procedure hist_buffer_accumulate_1dreal64
    end interface hist_buffer_accumulate
 
-!   interface hist_buffer_norm_value
-!      module procedure hist_buffer_norm_value_1dreal32
-!      module procedure hist_buffer_norm_value_1dreal64
-!   end interface hist_buffer_norm_value
+   interface hist_buffer_norm_value
+      module procedure hist_buffer_norm_value_1dreal32
+      module procedure hist_buffer_norm_value_1dreal64
+   end interface hist_buffer_norm_value
 
 CONTAINS
 
@@ -220,16 +220,156 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine hist_buffer_accumulate_1dreal32(buffer, field)
-      class(hist_buff_1dreal32_lst_t), intent(inout) :: buffer
-      real(REAL32),                    intent(in)    :: field(:)
+   subroutine hist_buffer_accumulate_1dreal32(buffer, field, cols_or_block,   &
+        cole, logger)
+      use hist_msg_handler, only: hist_log_messages, hist_add_error
+
+      ! Dummy arguments
+      class(hist_buffer_t),    target,   intent(inout) :: buffer
+      real(REAL32),                      intent(in)    :: field(:)
+      integer,                           intent(in)    :: cols_or_block
+      integer,                 optional, intent(in)    :: cole
+      type(hist_log_messages), optional, intent(inout) :: logger
+      ! Local variables
+      class(hist_buff_1dreal32_lst_t), pointer     :: buff32
+      class(hist_buff_1dreal64_lst_t), pointer     :: buff64
+      character(len=:),                allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_buffer_accumulate_1dreal32'
+
+      select type(buffer)
+      class is (hist_buff_1dreal32_lst_t)
+         buff32 => buffer
+         call buff32%accumulate(field, cols_or_block, cole, logger)
+      class is (hist_buff_1dreal64_lst_t)
+         ! Do we want to accumulate 32bit data into 64bit buffers?
+         buff64 => buffer
+         call buff64%accumulate(real(field, REAL64), cols_or_block, cole,     &
+              logger)
+      class default
+         buff_typestr = buffer%buffer_type()
+         call hist_add_error(subname, "unsupported buffer type, '",           &
+              errstr2=buff_typestr, errstr3="'", errors=logger)
+      end select
+
    end subroutine hist_buffer_accumulate_1dreal32
 
    !#######################################################################
 
-   subroutine hist_buffer_accumulate_1dreal64(buffer, field)
-      class(hist_buff_1dreal64_lst_t), intent(inout) :: buffer
-      real(REAL64),                    intent(in)    :: field(:)
+   subroutine hist_buffer_accumulate_1dreal64(buffer, field, cols_or_block,   &
+        cole, logger)
+      use hist_msg_handler, only: hist_log_messages, hist_add_error
+
+      ! Dummy arguments
+      class(hist_buffer_t),    target,   intent(inout) :: buffer
+      real(REAL64),                      intent(in)    :: field(:)
+      integer,                           intent(in)    :: cols_or_block
+      integer,                 optional, intent(in)    :: cole
+      type(hist_log_messages), optional, intent(inout) :: logger
+      ! Local variables
+      type(hist_buff_1dreal32_lst_t), pointer     :: buff32
+      type(hist_buff_1dreal64_lst_t), pointer     :: buff64
+      character(len=:),               allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_buffer_accumulate_1dreal64'
+
+      select type(buffer)
+      class is (hist_buff_1dreal32_lst_t)
+         ! Squeeze 64 bit data into 32 bit buffers
+         buff32 => buffer
+         call buff32%accumulate(real(field, REAL32), cols_or_block, cole,     &
+              logger)
+      class is (hist_buff_1dreal64_lst_t)
+         buff64 => buffer
+         call buff64%accumulate(field, cols_or_block, cole, logger)
+      class default
+         buff_typestr = buffer%buffer_type()
+         call hist_add_error(subname, "unsupported buffer type, '",           &
+              errstr2=buff_typestr, errstr3="'", errors=logger)
+      end select
+
    end subroutine hist_buffer_accumulate_1dreal64
+
+   !#######################################################################
+
+   subroutine hist_buffer_norm_value_1dreal32(buffer, norm_val, default_val,  &
+        logger)
+      use hist_msg_handler, only: hist_log_messages, hist_add_error
+
+      ! Dummy arguments
+      class(hist_buffer_t),    target,   intent(inout) :: buffer
+      real(REAL32),                      intent(inout) :: norm_val(:)
+      real(REAL32),            optional, intent(in)    :: default_val
+      type(hist_log_messages), optional, intent(inout) :: logger
+      ! Local variables
+      class(hist_buff_1dreal32_lst_t), pointer     :: buff32
+      class(hist_buff_1dreal64_lst_t), pointer     :: buff64
+      real(REAL64),                    allocatable :: norm_val64(:)
+      character(len=:),                allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_buffer_norm_value_1dreal32'
+
+      select type(buffer)
+      class is (hist_buff_1dreal32_lst_t)
+         buff32 => buffer
+         call buff32%norm_value(norm_val, default_val=default_val,            &
+              logger=logger)
+      class is (hist_buff_1dreal64_lst_t)
+         ! Truncate 64bit buffer into 32bit output
+         buff64 => buffer
+         allocate(norm_val64(size(norm_val, 1)))
+         if (present(default_val)) then
+            call buff64%norm_value(norm_val64,                                &
+                 default_val=REAL(default_val, REAL64), logger=logger)
+         else
+            call buff64%norm_value(norm_val64, logger=logger)
+         end if
+         norm_val(:) = REAL(norm_val64(:), REAL32)
+      class default
+         buff_typestr = buffer%buffer_type()
+         call hist_add_error(subname, "unsupported buffer type, '",           &
+              errstr2=buff_typestr, errstr3="'", errors=logger)
+      end select
+
+   end subroutine hist_buffer_norm_value_1dreal32
+
+   !#######################################################################
+
+   subroutine hist_buffer_norm_value_1dreal64(buffer, norm_val, default_val,  &
+      logger)
+      use hist_msg_handler, only: hist_log_messages, hist_add_error
+
+      ! Dummy arguments
+      class(hist_buffer_t),    target,   intent(inout) :: buffer
+      real(REAL64),                      intent(inout) :: norm_val(:)
+      real(REAL64),            optional, intent(in)    :: default_val
+      type(hist_log_messages), optional, intent(inout) :: logger
+      ! Local variables
+      type(hist_buff_1dreal32_lst_t), pointer     :: buff32
+      type(hist_buff_1dreal64_lst_t), pointer     :: buff64
+      real(REAL32),                   allocatable :: norm_val32(:)
+      character(len=:),               allocatable :: buff_typestr
+      character(len=*), parameter :: subname = 'hist_buffer_norm_value_1dreal64'
+
+      select type(buffer)
+      class is (hist_buff_1dreal32_lst_t)
+         ! Do we want to read out 32bit buffers into 64bit data?
+         buff32 => buffer
+         allocate(norm_val32(size(norm_val, 1)))
+         if (present(default_val)) then
+            call buffer%norm_value(norm_val32,                                &
+                 default_val=REAL(default_val, REAL32), logger=logger)
+         else
+            call buffer%norm_value(norm_val32, logger=logger)
+         end if
+         norm_val(:) = REAL(norm_val32(:), REAL64)
+      class is (hist_buff_1dreal64_lst_t)
+         buff64 => buffer
+         call buffer%norm_value(norm_val, default_val=default_val,            &
+              logger=logger)
+      class default
+         buff_typestr = buffer%buffer_type()
+         call hist_add_error(subname, "unsupported buffer type, '",           &
+              errstr2=buff_typestr, errstr3="'", errors=logger)
+      end select
+
+   end subroutine hist_buffer_norm_value_1dreal64
 
 end module hist_api

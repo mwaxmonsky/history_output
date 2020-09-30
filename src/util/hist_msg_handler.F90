@@ -234,7 +234,7 @@ CONTAINS
          else
             write(msg_strs(1), '(3a)') ": "
          end if
-         msg_len = msg_len + len_trim(msg_strs(1))
+         msg_len = msg_len + len_trim(msg_strs(1)) + 1 ! Keep space at end
          if (present(msgint1)) then
             write(int_strs(1), '(i0)') msgint1
             msg_len = msg_len + len_trim(int_strs(1))
@@ -257,8 +257,8 @@ CONTAINS
             allocate(character(len=msg_len) :: new_log_entry%log_message,     &
                  stat=aerr)
             if (aerr == 0) then
-               write(new_log_entry%log_message, '(7a)')                       &
-                    trim(MSG_HEAD(msg_lvl)), trim(msg_strs(1)),               &
+               write(new_log_entry%log_message, '(8a)')                       &
+                    trim(MSG_HEAD(msg_lvl)), trim(msg_strs(1)), ' ',          &
                     trim(msgstr1), trim(int_strs(1)), trim(msg_strs(2)),      &
                     trim(int_strs(2)), trim(msg_strs(3))
             else

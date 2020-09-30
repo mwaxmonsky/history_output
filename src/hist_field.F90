@@ -75,9 +75,9 @@ CONTAINS
 
       nullify(field)
       select type(finfo => buffer%field_info)
-         type is (hist_field_info_t)
-            field => finfo
-         end select
+      type is (hist_field_info_t)
+         field => finfo
+      end select
    end subroutine hist_get_field
 
    !#######################################################################
