@@ -52,5 +52,5 @@ test_hist_buffer: test_hist_buffer.F90 $(HISTOBJS) hist_hashable.o  hist_msg_han
 
 # CLEAN
 clean:
-	@rm -f *.o *.mod
+	@rm -f *.o *.mod hist_test.log
 	@rm -f test_hash_table test_hist_buffer
