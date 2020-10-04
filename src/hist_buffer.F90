@@ -8,6 +8,24 @@ module hist_buffer
    ! Public interfaces
    public :: buffer_factory
 
+   ! Accumulation types -- the integers and array positions below must match
+   integer, parameter, public :: hist_accum_lst = 1 ! last sample
+   integer, parameter, public :: hist_accum_min = 2 ! minimum sample
+   integer, parameter, public :: hist_accum_max = 3 ! maximum sample
+   integer, parameter, public :: hist_accum_avg = 4 ! sample average
+   integer, parameter, public :: hist_accum_var = 5 ! sample standard deviation
+
+   integer, parameter         :: as_len = 36
+   character(len=as_len), parameter, public :: accum_strings(5) = (/          &
+        'last sampled value                  ',                               &
+        'minimum of sampled values           ',                               &
+        'maximum of sampled values           ',                               &
+        'average of sampled values           ',                               &
+        'standard deviation of sampled values' /)
+
+   character(len=3), parameter, public :: accum_abbrev(5) =                   &
+        (/ 'lst', 'min', 'max', 'avg', 'var' /)
+
    ! Time sampling flag indices
    !!XXgoldyXX: Todo: decide on sampling types
 
@@ -17,11 +35,11 @@ module hist_buffer
       integer,                             private :: vol = -1 ! For host output
       integer,                             private :: horiz_axis_ind = 0
       integer,                             private :: rank = 0
+      integer,                             private :: accum_type = 0
       integer,                allocatable, private :: field_shape(:)
       integer,                allocatable, private :: num_samples(:)
       integer,                allocatable, private :: block_begs(:)
       integer,                allocatable, private :: block_ends(:)
-      character(len=:),       allocatable, private :: accum_str
       character(len=:),       allocatable, private :: buff_type
       class(hist_buffer_t),   pointer              :: next => NULL()
    contains
@@ -37,30 +55,30 @@ module hist_buffer
       procedure(hist_buff_init),    deferred :: initialize
    end type hist_buffer_t
 
-   type, public, extends(hist_buffer_t) :: hist_buff_1dreal32_lst_t
+   type, public, extends(hist_buffer_t) :: hist_buff_1dreal32_inst_t
       real(REAL32), pointer :: data(:) => NULL()
    CONTAINS
-      procedure :: clear => buff_1dreal32_lst_clear
-      procedure :: accumulate => buff_1dreal32_lst_accum
-      procedure :: norm_value => buff_1dreal32_lst_value
-      procedure :: initialize => init_buff_1dreal32
-   end type hist_buff_1dreal32_lst_t
+      procedure :: clear => buff_1dreal32_inst_clear
+      procedure :: accumulate => buff_1dreal32_inst_accum
+      procedure :: norm_value => buff_1dreal32_inst_value
+      procedure :: initialize => init_buff_inst_1dreal32
+   end type hist_buff_1dreal32_inst_t
 
-   type, public, extends(hist_buff_1dreal32_lst_t) :: hist_buff_1dreal32_avg_t
+   type, public, extends(hist_buff_1dreal32_inst_t) :: hist_buff_1dreal32_avg_t
    CONTAINS
       procedure :: accumulate => buff_1dreal32_avg_accum
       procedure :: norm_value => buff_1dreal32_avg_value
       procedure :: initialize => init_buff_avg_1dreal32
    end type hist_buff_1dreal32_avg_t
 
-   type, public, extends(hist_buffer_t) :: hist_buff_1dreal64_lst_t
+   type, public, extends(hist_buffer_t) :: hist_buff_1dreal64_inst_t
       real(REAL64), pointer :: data(:) => NULL()
    CONTAINS
-      procedure :: clear => buff_1dreal64_lst_clear
-      procedure :: accumulate => buff_1dreal64_lst_accum
-      procedure :: norm_value => buff_1dreal64_lst_value
-      procedure :: initialize => init_buff_1dreal64
-   end type hist_buff_1dreal64_lst_t
+      procedure :: clear => buff_1dreal64_inst_clear
+      procedure :: accumulate => buff_1dreal64_inst_accum
+      procedure :: norm_value => buff_1dreal64_inst_value
+      procedure :: initialize => init_buff_inst_1dreal64
+   end type hist_buff_1dreal64_inst_t
 
    ! Abstract interfaces for hist_buffer_t class
    abstract interface
@@ -74,7 +92,7 @@ module hist_buffer
 
    abstract interface
       subroutine hist_buff_init(this, field_in, volume_in, horiz_axis_in,     &
-           shape_in, block_sizes_in, block_ind_in, logger)
+           accum_type_in, shape_in, block_sizes_in, block_ind_in, logger)
          use hist_msg_handler, only: hist_log_messages
          import                   :: hist_buffer_t
          import                   :: hist_hashable_t
@@ -82,6 +100,7 @@ module hist_buffer
          class(hist_hashable_t),  pointer                 :: field_in
          integer,                           intent(in)    :: volume_in
          integer,                           intent(in)    :: horiz_axis_in
+         integer,                           intent(in)    :: accum_type_in
          integer,                           intent(in)    :: shape_in(:)
          integer,                 optional, intent(in)    :: block_sizes_in(:)
          integer,                 optional, intent(in)    :: block_ind_in
@@ -173,8 +192,8 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine init_buffer(this, field_in, volume_in, horiz_axis_in, shape_in, &
-        block_sizes_in, block_ind_in, logger)
+   subroutine init_buffer(this, field_in, volume_in, horiz_axis_in,           &
+        accum_type_in, shape_in, block_sizes_in, block_ind_in, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
       use hist_msg_handler, only: hist_add_error
 
@@ -183,6 +202,7 @@ CONTAINS
       class(hist_hashable_t),  pointer                 :: field_in
       integer,                           intent(in)    :: volume_in
       integer,                           intent(in)    :: horiz_axis_in
+      integer,                           intent(in)    :: accum_type_in
       integer,                           intent(in)    :: shape_in(:)
       integer,                 optional, intent(in)    :: block_sizes_in(:)
       integer,                 optional, intent(in)    :: block_ind_in
@@ -202,6 +222,7 @@ CONTAINS
          this%field_info => field_in
          this%vol = volume_in
          this%horiz_axis_ind = horiz_axis_in
+         this%accum_type = accum_type_in
          allocate(this%field_shape(size(shape_in, 1)), stat=astat)
          if (astat == 0) then
             this%field_shape(:) = shape_in(:)
@@ -222,10 +243,11 @@ CONTAINS
    !#######################################################################
 
    function accum_string(this) result(ac_str)
-      class(hist_buffer_t), intent(in) :: this
-      character(len=:), allocatable    :: ac_str
+      class(hist_buffer_t), intent(in)   :: this
+      character(len=as_len), allocatable :: ac_str
 
-      ac_str = this%accum_str
+      ac_str = accum_strings(this%accum_type)
+
    end function accum_string
 
    !#######################################################################
@@ -244,15 +266,15 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine buff_1dreal32_lst_clear(this, logger)
+   subroutine buff_1dreal32_inst_clear(this, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
 
       ! Dummy arguments
-      class(hist_buff_1dreal32_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal32_inst_t),   intent(inout) :: this
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
       integer                     :: aerr
-      character(len=*), parameter :: subname = 'buff_1dreal32_lst_clear'
+      character(len=*), parameter :: subname = 'buff_1dreal32_inst_clear'
 
       call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
@@ -264,45 +286,48 @@ CONTAINS
       end if
       this%data = 0.0_REAL32
 
-   end subroutine buff_1dreal32_lst_clear
+   end subroutine buff_1dreal32_inst_clear
 
    !#######################################################################
 
-   subroutine init_buff_1dreal32(this, field_in, volume_in, horiz_axis_in, &
-        shape_in, block_sizes_in, block_ind_in, logger)
+   subroutine init_buff_inst_1dreal32(this, field_in, volume_in,              &
+        horiz_axis_in, accum_type_in, shape_in, block_sizes_in, block_ind_in, &
+        logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
 
       ! Dummy arguments
-      class(hist_buff_1dreal32_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal32_inst_t),  intent(inout) :: this
       class(hist_hashable_t),  pointer                 :: field_in
       integer,                           intent(in)    :: volume_in
       integer,                           intent(in)    :: horiz_axis_in
+      integer,                           intent(in)    :: accum_type_in
       integer,                           intent(in)    :: shape_in(:)
       integer,                 optional, intent(in)    :: block_sizes_in(:)
       integer,                 optional, intent(in)    :: block_ind_in
       type(hist_log_messages), optional, intent(inout) :: logger
 
-      call init_buffer(this, field_in, volume_in, horiz_axis_in, shape_in,    &
-           block_sizes_in, block_ind_in, logger=logger)
+      call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
+           accum_type_in, shape_in, block_sizes_in, block_ind_in, logger=logger)
       call this%clear(logger=logger)
-      this%accum_str = 'last sampled value'
-      this%buff_type = 'hist_buff_1dreal32_lst_t'
+      this%buff_type = 'buff_1dreal32_'//accum_abbrev(accum_type_in)
 
-   end subroutine init_buff_1dreal32
+   end subroutine init_buff_inst_1dreal32
 
    !#######################################################################
 
-   subroutine buff_1dreal32_lst_accum(this, field, cols_or_block, cole, logger)
+   subroutine buff_1dreal32_inst_accum(this, field, cols_or_block, cole, logger)
       use hist_msg_handler, only: hist_log_messages
       ! Dummy arguments
-      class(hist_buff_1dreal32_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal32_inst_t),  intent(inout) :: this
       real(REAL32),                      intent(in)    :: field(:)
       integer,                           intent(in)    :: cols_or_block
       integer,                 optional, intent(in)    :: cole
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      integer :: col_beg_use
-      integer :: col_end_use
+      integer      :: col_beg_use
+      integer      :: col_end_use
+      integer      :: ind1
+      real(REAL32) :: fld_val
 
       if (this%has_blocks()) then
          ! For a blocked field, <cols_or_block> is a block index
@@ -319,18 +344,41 @@ CONTAINS
          end if
       end if
 
-      this%data(col_beg_use:col_end_use) = field(:)
-      this%num_samples(col_beg_use:col_end_use) = 1
+      select case (this%accum_type)
+      case (hist_accum_lst)
+         this%data(col_beg_use:col_end_use) = field(:)
+         this%num_samples(col_beg_use:col_end_use) = 1
+      case (hist_accum_min)
+         do ind1 = col_beg_use, col_end_use
+            fld_val = field(ind1 - col_beg_use + 1)
+            if (this%num_samples(ind1) == 0) then
+               this%data(ind1) = fld_val
+            else if (fld_val < this%data(ind1)) then
+               this%data(ind1) = fld_val
+            end if ! No else, we already have the minimum value for this col
+            this%num_samples(ind1) = 1
+         end do
+      case (hist_accum_max)
+         do ind1 = col_beg_use, col_end_use
+            fld_val = field(ind1 - col_beg_use + 1)
+            if (this%num_samples(ind1) == 0) then
+               this%data(ind1) = fld_val
+            else if (fld_val > this%data(ind1)) then
+               this%data(ind1) = fld_val
+            end if ! No else, we already have the maximum value for this col
+            this%num_samples(ind1) = 1
+         end do
+      end select
 
-   end subroutine buff_1dreal32_lst_accum
+   end subroutine buff_1dreal32_inst_accum
 
    !#######################################################################
 
-   subroutine buff_1dreal32_lst_value(this, norm_val, default_val, logger)
+   subroutine buff_1dreal32_inst_value(this, norm_val, default_val, logger)
       use hist_msg_handler, only: hist_log_messages
 
       ! Dummy arguments
-      class(hist_buff_1dreal32_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal32_inst_t),  intent(inout) :: this
       real(REAL32),                      intent(inout) :: norm_val(:)
       real(REAL32),            optional, intent(in)    :: default_val
       type(hist_log_messages), optional, intent(inout) :: logger
@@ -347,12 +395,13 @@ CONTAINS
          end if
       end do
 
-   end subroutine buff_1dreal32_lst_value
+   end subroutine buff_1dreal32_inst_value
 
    !#######################################################################
 
    subroutine init_buff_avg_1dreal32(this, field_in, volume_in,               &
-        horiz_axis_in, shape_in, block_sizes_in, block_ind_in, logger)
+        horiz_axis_in, accum_type_in, shape_in, block_sizes_in, block_ind_in, &
+        logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
 
       ! Dummy arguments
@@ -360,16 +409,16 @@ CONTAINS
       class(hist_hashable_t),  pointer                 :: field_in
       integer,                           intent(in)    :: volume_in
       integer,                           intent(in)    :: horiz_axis_in
+      integer,                           intent(in)    :: accum_type_in
       integer,                           intent(in)    :: shape_in(:)
       integer,                 optional, intent(in)    :: block_sizes_in(:)
       integer,                 optional, intent(in)    :: block_ind_in
       type(hist_log_messages), optional, intent(inout) :: logger
 
-      call init_buffer(this, field_in, volume_in, horiz_axis_in, shape_in,    &
-           block_sizes_in, block_ind_in, logger=logger)
+      call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
+           accum_type_in, shape_in, block_sizes_in, block_ind_in, logger=logger)
       call this%clear(logger=logger)
-      this%accum_str = 'average of sampled values'
-      this%buff_type = 'hist_buff_1dreal32_avg_t'
+      this%buff_type = 'buff_1dreal32_'//accum_abbrev(accum_type_in)
 
    end subroutine init_buff_avg_1dreal32
 
@@ -437,15 +486,15 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine buff_1dreal64_lst_clear(this, logger)
+   subroutine buff_1dreal64_inst_clear(this, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
 
       ! Dummy arguments
-      class(hist_buff_1dreal64_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal64_inst_t),  intent(inout) :: this
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
       integer                     :: aerr
-      character(len=*), parameter :: subname = 'buff_1dreal64_lst_clear'
+      character(len=*), parameter :: subname = 'buff_1dreal64_inst_clear'
 
       call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
@@ -457,44 +506,47 @@ CONTAINS
       end if
       this%data = 0.0_REAL64
 
-   end subroutine buff_1dreal64_lst_clear
+   end subroutine buff_1dreal64_inst_clear
 
    !#######################################################################
 
-   subroutine init_buff_1dreal64(this, field_in, volume_in, horiz_axis_in,    &
-        shape_in, block_sizes_in, block_ind_in, logger)
+   subroutine init_buff_inst_1dreal64(this, field_in, volume_in,              &
+        horiz_axis_in, accum_type_in, shape_in, block_sizes_in, block_ind_in, &
+        logger)
       use hist_msg_handler, only: hist_log_messages
 
-      class(hist_buff_1dreal64_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal64_inst_t),   intent(inout) :: this
       class(hist_hashable_t),  pointer                 :: field_in
       integer,                           intent(in)    :: volume_in
       integer,                           intent(in)    :: horiz_axis_in
+      integer,                           intent(in)    :: accum_type_in
       integer,                           intent(in)    :: shape_in(:)
       integer,                 optional, intent(in)    :: block_sizes_in(:)
       integer,                 optional, intent(in)    :: block_ind_in
       type(hist_log_messages), optional, intent(inout) :: logger
 
-      call init_buffer(this, field_in, volume_in, horiz_axis_in, shape_in,    &
-           block_sizes_in, block_ind_in, logger=logger)
+      call init_buffer(this, field_in, volume_in, horiz_axis_in,              &
+           accum_type_in, shape_in, block_sizes_in, block_ind_in, logger=logger)
       call this%clear(logger=logger)
-      this%accum_str = 'last sampled value'
-      this%buff_type = 'hist_buff_1dreal64_lst_t'
+      this%buff_type = 'buff_1dreal64_'//accum_abbrev(accum_type_in)
 
-   end subroutine init_buff_1dreal64
+   end subroutine init_buff_inst_1dreal64
 
    !#######################################################################
 
-   subroutine buff_1dreal64_lst_accum(this, field, cols_or_block, cole, logger)
+   subroutine buff_1dreal64_inst_accum(this, field, cols_or_block, cole, logger)
       use hist_msg_handler, only: hist_log_messages
       ! Dummy arguments
-      class(hist_buff_1dreal64_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal64_inst_t),  intent(inout) :: this
       real(REAL64),                      intent(in)    :: field(:)
       integer,                           intent(in)    :: cols_or_block
       integer,                 optional, intent(in)    :: cole
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      integer :: col_beg_use
-      integer :: col_end_use
+      integer      :: col_beg_use
+      integer      :: col_end_use
+      integer      :: ind1
+      real(REAL64) :: fld_val
 
       if (this%has_blocks()) then
          ! For a blocked field, <cols_or_block> is a block index
@@ -511,17 +563,41 @@ CONTAINS
          end if
       end if
 
-      this%data(col_beg_use:col_end_use) = field(:)
-      this%num_samples(col_beg_use:col_end_use) = 1
 
-   end subroutine buff_1dreal64_lst_accum
+      select case (this%accum_type)
+      case (hist_accum_lst)
+         this%data(col_beg_use:col_end_use) = field(:)
+         this%num_samples(col_beg_use:col_end_use) = 1
+      case (hist_accum_min)
+         do ind1 = col_beg_use, col_end_use
+            fld_val = field(ind1 - col_beg_use + 1)
+            if (this%num_samples(ind1) == 0) then
+               this%data(ind1) = fld_val
+            else if (fld_val < this%data(ind1)) then
+               this%data(ind1) = fld_val
+            end if ! No else, we already have the minimum value for this col
+            this%num_samples(ind1) = 1
+         end do
+      case (hist_accum_max)
+         do ind1 = col_beg_use, col_end_use
+            fld_val = field(ind1 - col_beg_use + 1)
+            if (this%num_samples(ind1) == 0) then
+               this%data(ind1) = fld_val
+            else if (fld_val > this%data(ind1)) then
+               this%data(ind1) = fld_val
+            end if ! No else, we already have the maximum value for this col
+            this%num_samples(ind1) = 1
+         end do
+      end select
+
+   end subroutine buff_1dreal64_inst_accum
 
    !#######################################################################
 
-   subroutine buff_1dreal64_lst_value(this, norm_val, default_val, logger)
+   subroutine buff_1dreal64_inst_value(this, norm_val, default_val, logger)
       use hist_msg_handler, only: hist_log_messages, ERROR, VERBOSE
       ! Dummy arguments
-      class(hist_buff_1dreal64_lst_t),   intent(inout) :: this
+      class(hist_buff_1dreal64_inst_t),  intent(inout) :: this
       real(REAL64),                      intent(inout) :: norm_val(:)
       real(REAL64),            optional, intent(in)    :: default_val
       type(hist_log_messages), optional, intent(inout) :: logger
@@ -540,7 +616,7 @@ CONTAINS
 
       norm_val(:) = this%data(:)
 
-   end subroutine buff_1dreal64_lst_value
+   end subroutine buff_1dreal64_inst_value
 
    !#######################################################################
 
@@ -567,31 +643,31 @@ CONTAINS
       type(hist_log_messages), optional, intent(inout) :: logger
 
       ! Local variables
-      character(len=*),               parameter :: subname = 'buffer_factory'
-      ! For buffer allocation
-      integer                                   :: aerr
-      type(hist_buff_1dreal32_lst_t), pointer   :: real32_1_lst => NULL()
-      type(hist_buff_1dreal32_avg_t), pointer   :: real32_1_avg => NULL()
-      type(hist_buff_1dreal64_lst_t), pointer   :: real64_1_lst => NULL()
+      character(len=*),                parameter :: subname = 'buffer_factory'
+      ! For buffer                     allocation
+      integer                                    :: aerr
+      type(hist_buff_1dreal32_inst_t), pointer   :: real32_1_inst => NULL()
+      type(hist_buff_1dreal32_avg_t),  pointer   :: real32_1_avg  => NULL()
+      type(hist_buff_1dreal64_inst_t), pointer   :: real64_1_inst => NULL()
 
 
       nullify(newbuf)
       ! Create new buffer
       select case (trim(buffer_type))
-      case ('real32_1_lst')
-         allocate(real32_1_lst, stat=aerr)
+      case ('real32_1_lst', 'real32_1_min', 'real32_1_max')
+         allocate(real32_1_inst, stat=aerr)
          if (aerr == 0) then
-            newbuf => real32_1_lst
+            newbuf => real32_1_inst
          end if
-      case ('real32_1_avg')
+      case ('real32_1_avg', 'real32_1_var')
          allocate(real32_1_avg, stat=aerr)
          if (aerr == 0) then
             newbuf => real32_1_avg
          end if
-      case ('real64_1_lst')
-         allocate(real64_1_lst, stat=aerr)
+      case ('real64_1_lst', 'real64_1_min', 'real64_1_max')
+         allocate(real64_1_inst, stat=aerr)
          if (aerr == 0) then
-            newbuf => real64_1_lst
+            newbuf => real64_1_inst
          end if
       case default
          call hist_add_error(subname,                                         &

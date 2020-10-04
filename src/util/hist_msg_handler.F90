@@ -228,9 +228,16 @@ CONTAINS
          ! First, calculate the message length
          msg_strs(:) = ''
          int_strs(:) = ''
-         msg_len = len_trim(MSG_HEAD(msg_lvl)) + len_trim(msgstr1)
+         msg_len = len_trim(msgstr1)
+         if (msg_lvl == ERROR) then
+            msg_len = msg_len + len_trim(MSG_HEAD(msg_lvl))
+         end if
          if (present(subname)) then
-            write(msg_strs(1), '(3a)') " in ", trim(subname), ": "
+            if (msg_lvl == ERROR) then
+               write(msg_strs(1), '(3a)') " in ", trim(subname), ": "
+            else
+               write(msg_strs(1), '(3a)') "In ", trim(subname), ": "
+            end if
          else
             write(msg_strs(1), '(3a)') ": "
          end if
@@ -257,10 +264,16 @@ CONTAINS
             allocate(character(len=msg_len) :: new_log_entry%log_message,     &
                  stat=aerr)
             if (aerr == 0) then
-               write(new_log_entry%log_message, '(8a)')                       &
-                    trim(MSG_HEAD(msg_lvl)), trim(msg_strs(1)), ' ',          &
-                    trim(msgstr1), trim(int_strs(1)), trim(msg_strs(2)),      &
-                    trim(int_strs(2)), trim(msg_strs(3))
+               if (msg_lvl == ERROR) then
+                  write(new_log_entry%log_message, '(8a)')                    &
+                       trim(MSG_HEAD(msg_lvl)), trim(msg_strs(1)), ' ',       &
+                       trim(msgstr1), trim(int_strs(1)), trim(msg_strs(2)),   &
+                       trim(int_strs(2)), trim(msg_strs(3))
+               else
+                  write(new_log_entry%log_message, '(7a)') trim(msg_strs(1)), &
+                       ' ', trim(msgstr1), trim(int_strs(1)),                 &
+                       trim(msg_strs(2)), trim(int_strs(2)), trim(msg_strs(3))
+               end if
             else
                ! Hail Mary attempt
                new_log_entry%log_message = 'Message allocation error'

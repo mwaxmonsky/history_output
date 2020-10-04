@@ -28,6 +28,10 @@ program test_hist_buffer
         'K', 'real', errors=errors)
    call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'lst', 1,       &
         buffer, errors=errors)
+   call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'min', 1,       &
+        buffer, errors=errors)
+   call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'max', 1,       &
+        buffer, errors=errors)
    call hist_new_buffer(my_fields, (/ num_cols /), REAL32, 1, 'avg', 1,       &
         buffer, errors=errors)
    fld_ptr => my_fields%next
@@ -68,30 +72,41 @@ program test_hist_buffer
             exit
          else
             ! Check answers
-            if (buff_ptr%buffer_type() == 'hist_buff_1dreal32_lst_t') then
+            select case(buff_ptr%buffer_type())
+            case ('buff_1dreal32_lst', 'buff_1dreal32_max')
                do index = 1, num_cols
                   test_val32 = 4.0_real32 * real(index, real32)
                   if (field32(index) /= test_val32) then
                      write(errmsg, '(a,i0,2(a,f8.3))') 'field(', index,       &
                           ') = ', field32(index), ' /= ', test_val32
-                     call hist_add_error('hist_buff_1dreal32_lst_t check',    &
+                     call hist_add_error(buff_ptr%buffer_type()//' check',    &
                           trim(errmsg), errors=errors)
                   end if
                end do
-            else if (buff_ptr%buffer_type() == 'hist_buff_1dreal32_avg_t') then
+            case ('buff_1dreal32_min')
+               do index = 1, num_cols
+                  test_val32 = 2.0_real32 * real(index, real32)
+                  if (field32(index) /= test_val32) then
+                     write(errmsg, '(a,i0,2(a,f8.3))') 'field(', index,       &
+                          ') = ', field32(index), ' /= ', test_val32
+                     call hist_add_error(buff_ptr%buffer_type()//' check',    &
+                          trim(errmsg), errors=errors)
+                  end if
+               end do
+            case ('buff_1dreal32_avg')
                do index = 1, num_cols
                   test_val32 = 3.0_real32 * real(index, real32)
                   if (field32(index) /= test_val32) then
                      write(errmsg, '(a,i0,2(a,f8.2))') 'field(', index,       &
                           ') = ', field32(index), ' /= ', test_val32
-                     call hist_add_error('hist_buff_1dreal32_avg_t check',    &
+                     call hist_add_error(buff_ptr%buffer_type()//' check',    &
                           trim(errmsg), errors=errors)
                   end if
                end do
-            else
+            case default
                call hist_add_error('answer check, unknown buffer type',       &
                     buff_ptr%buffer_type(), errors=errors)
-            end if
+            end select
             buff_ptr => buff_ptr%next
          end if
       else
@@ -106,7 +121,7 @@ program test_hist_buffer
            subname='my_fields accumulate')
    else
       ! Check answers
-      if (buff_ptr%buffer_type() == 'hist_buff_1dreal64_lst_t') then
+      if (buff_ptr%buffer_type() == 'buff_1dreal64_lst') then
          do index = 1, num_cols
             test_val64 = 6.0_real64 * real(index, real64) - 3.0_real64
             if (field64(index) /= test_val64) then

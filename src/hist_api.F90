@@ -1,8 +1,8 @@
 module hist_api
 
    use ISO_FORTRAN_ENV, only: REAL64, REAL32, INT32, INT64
-   use hist_buffer,     only: hist_buff_1dreal32_lst_t
-   use hist_buffer,     only: hist_buff_1dreal64_lst_t
+   use hist_buffer,     only: hist_buff_1dreal32_inst_t
+   use hist_buffer,     only: hist_buff_1dreal64_inst_t
 
    implicit none
    private
@@ -77,6 +77,8 @@ CONTAINS
       use hist_msg_handler, only: hist_add_alloc_error, ERROR
       use hist_hashable,    only: hist_hashable_t
       use hist_buffer,      only: hist_buffer_t, buffer_factory
+      use hist_buffer,      only: hist_accum_lst, hist_accum_min, hist_accum_max
+      use hist_buffer,      only: hist_accum_avg, hist_accum_var
       use hist_field,       only: hist_field_info_t
 
       ! Dummy arguments
@@ -94,6 +96,7 @@ CONTAINS
       ! Local variables
       integer                              :: rank
       integer                              :: line_loc
+      integer                              :: accum_val
       character(len=8)                     :: kind_string
       character(len=3)                     :: accum_string
       character(len=16)                    :: bufftype_string
@@ -171,14 +174,19 @@ CONTAINS
       select case(trim(accum_type))
       case ('I', 'i', 'lst')
          accum_string = 'lst'
+         accum_val = hist_accum_lst
       case ('A', 'a', 'avg')
          accum_string = 'avg'
+         accum_val = hist_accum_avg
       case ('M', 'm', 'min')
          accum_string = 'min'
+         accum_val = hist_accum_min
       case ('X', 'x', 'max')
          accum_string = 'max'
+         accum_val = hist_accum_max
       case ('S', 's', 'var')
          accum_string = 'var'
+         accum_val = hist_accum_var
       case default
          call hist_add_error(subname,                                         &
               "Unknown accumulation operator type, '",                        &
@@ -204,7 +212,7 @@ CONTAINS
       if (associated(buffer)) then
          field_base => field
          call buffer%initialize(field_base, output_vol, horiz_axis_ind,       &
-              buff_shape, block_sizes, block_ind, logger=errors)
+              accum_val, buff_shape, block_sizes, block_ind, logger=errors)
          ! Add this buffer to its field (field should be there if buffer is)
          if (associated(field%buffers)) then
             buff_ptr => field%buffers
@@ -332,16 +340,16 @@ CONTAINS
       integer,                 optional, intent(in)    :: cole
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      class(hist_buff_1dreal32_lst_t), pointer     :: buff32
-      class(hist_buff_1dreal64_lst_t), pointer     :: buff64
-      character(len=:),                allocatable :: buff_typestr
+      class(hist_buff_1dreal32_inst_t), pointer     :: buff32
+      class(hist_buff_1dreal64_inst_t), pointer     :: buff64
+      character(len=:),                 allocatable :: buff_typestr
       character(len=*), parameter :: subname = 'hist_buffer_accumulate_1dreal32'
 
       select type(buffer)
-      class is (hist_buff_1dreal32_lst_t)
+      class is (hist_buff_1dreal32_inst_t)
          buff32 => buffer
          call buff32%accumulate(field, cols_or_block, cole, logger)
-      class is (hist_buff_1dreal64_lst_t)
+      class is (hist_buff_1dreal64_inst_t)
          ! Do we want to accumulate 32bit data into 64bit buffers?
          buff64 => buffer
          call buff64%accumulate(real(field, REAL64), cols_or_block, cole,     &
@@ -368,18 +376,18 @@ CONTAINS
       integer,                 optional, intent(in)    :: cole
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      type(hist_buff_1dreal32_lst_t), pointer     :: buff32
-      type(hist_buff_1dreal64_lst_t), pointer     :: buff64
-      character(len=:),               allocatable :: buff_typestr
+      type(hist_buff_1dreal32_inst_t), pointer     :: buff32
+      type(hist_buff_1dreal64_inst_t), pointer     :: buff64
+      character(len=:),                allocatable :: buff_typestr
       character(len=*), parameter :: subname = 'hist_buffer_accumulate_1dreal64'
 
       select type(buffer)
-      class is (hist_buff_1dreal32_lst_t)
+      class is (hist_buff_1dreal32_inst_t)
          ! Squeeze 64 bit data into 32 bit buffers
          buff32 => buffer
          call buff32%accumulate(real(field, REAL32), cols_or_block, cole,     &
               logger)
-      class is (hist_buff_1dreal64_lst_t)
+      class is (hist_buff_1dreal64_inst_t)
          buff64 => buffer
          call buff64%accumulate(field, cols_or_block, cole, logger)
       class default
@@ -403,18 +411,18 @@ CONTAINS
       real(REAL32),            optional, intent(in)    :: default_val
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      class(hist_buff_1dreal32_lst_t), pointer     :: buff32
-      class(hist_buff_1dreal64_lst_t), pointer     :: buff64
-      real(REAL64),                    allocatable :: norm_val64(:)
-      character(len=:),                allocatable :: buff_typestr
+      class(hist_buff_1dreal32_inst_t), pointer     :: buff32
+      class(hist_buff_1dreal64_inst_t), pointer     :: buff64
+      real(REAL64),                     allocatable :: norm_val64(:)
+      character(len=:),                 allocatable :: buff_typestr
       character(len=*), parameter :: subname = 'hist_buffer_norm_value_1dreal32'
 
       select type(buffer)
-      class is (hist_buff_1dreal32_lst_t)
+      class is (hist_buff_1dreal32_inst_t)
          buff32 => buffer
          call buff32%norm_value(norm_val, default_val=default_val,            &
               logger=logger)
-      class is (hist_buff_1dreal64_lst_t)
+      class is (hist_buff_1dreal64_inst_t)
          ! Truncate 64bit buffer into 32bit output
          buff64 => buffer
          allocate(norm_val64(size(norm_val, 1)))
@@ -446,14 +454,14 @@ CONTAINS
       real(REAL64),            optional, intent(in)    :: default_val
       type(hist_log_messages), optional, intent(inout) :: logger
       ! Local variables
-      type(hist_buff_1dreal32_lst_t), pointer     :: buff32
-      type(hist_buff_1dreal64_lst_t), pointer     :: buff64
-      real(REAL32),                   allocatable :: norm_val32(:)
-      character(len=:),               allocatable :: buff_typestr
+      type(hist_buff_1dreal32_inst_t), pointer     :: buff32
+      type(hist_buff_1dreal64_inst_t), pointer     :: buff64
+      real(REAL32),                    allocatable :: norm_val32(:)
+      character(len=:),                allocatable :: buff_typestr
       character(len=*), parameter :: subname = 'hist_buffer_norm_value_1dreal64'
 
       select type(buffer)
-      class is (hist_buff_1dreal32_lst_t)
+      class is (hist_buff_1dreal32_inst_t)
          ! Do we want to read out 32bit buffers into 64bit data?
          buff32 => buffer
          allocate(norm_val32(size(norm_val, 1)))
@@ -464,7 +472,7 @@ CONTAINS
             call buffer%norm_value(norm_val32, logger=logger)
          end if
          norm_val(:) = REAL(norm_val32(:), REAL64)
-      class is (hist_buff_1dreal64_lst_t)
+      class is (hist_buff_1dreal64_inst_t)
          buff64 => buffer
          call buffer%norm_value(norm_val, default_val=default_val,            &
               logger=logger)
