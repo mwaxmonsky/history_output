@@ -117,7 +117,7 @@ module hist_hash_table
       integer, private                          :: overflow_size = -1
       integer, private                          :: key_offset = gen_hash_key_offset
       type(table_entry_t), private, allocatable :: primary_table(:)
- ! Statistics
+      ! Statistics
       integer, private                          :: num_keys = 0
       integer, private                          :: num_key_collisions = 0
       integer, private                          :: max_collision = 0
