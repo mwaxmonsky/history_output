@@ -26,9 +26,6 @@ module hist_buffer
    character(len=3), parameter, public :: accum_abbrev(5) =                   &
         (/ 'lst', 'min', 'max', 'avg', 'var' /)
 
-   ! Time sampling flag indices
-   !!XXgoldyXX: Todo: decide on sampling types
-
    type, abstract, public :: hist_buffer_t
       ! hist_buffer_t is an abstract base class for hist_outfld buffers
       class(hist_hashable_t), pointer              :: field_info => NULL()
@@ -37,7 +34,6 @@ module hist_buffer
       integer,                             private :: rank = 0
       integer,                             private :: accum_type = 0
       integer,                allocatable, private :: field_shape(:)
-      integer,                allocatable, private :: num_samples(:)
       integer,                allocatable, private :: block_begs(:)
       integer,                allocatable, private :: block_ends(:)
       character(len=:),       allocatable, private :: buff_type
@@ -50,14 +46,15 @@ module hist_buffer
       procedure                              :: init_buffer
       procedure                              :: accum_string
       procedure                              :: buffer_type
-      procedure                              :: clear => hist_buff_clear
       procedure                              :: check_status
       procedure                              :: has_blocks
+      procedure(hist_buff_clear),   deferred :: clear
       procedure(hist_buff_init),    deferred :: initialize
    end type hist_buffer_t
 
    type, public, extends(hist_buffer_t) :: hist_buff_1dreal32_t
       real(REAL32), pointer :: data(:) => NULL()
+      integer,  allocatable,   private :: num_samples(:)
    CONTAINS
       procedure :: clear => buff_1dreal32_clear
       procedure :: accumulate => buff_1dreal32_accum
@@ -67,6 +64,7 @@ module hist_buffer
 
    type, public, extends(hist_buffer_t) :: hist_buff_2dreal32_t
       real(REAL32), pointer :: data(:,:) => NULL()
+      integer,  allocatable,   private :: num_samples(:,:)
    CONTAINS
       procedure :: clear => buff_2dreal32_clear
       procedure :: accumulate => buff_2dreal32_accum
@@ -76,6 +74,7 @@ module hist_buffer
 
    type, public, extends(hist_buffer_t) :: hist_buff_1dreal64_t
       real(REAL64), pointer :: data(:) => NULL()
+      integer,  allocatable,   private :: num_samples(:)
    CONTAINS
       procedure :: clear => buff_1dreal64_clear
       procedure :: accumulate => buff_1dreal64_accum
@@ -85,6 +84,7 @@ module hist_buffer
 
    type, public, extends(hist_buffer_t) :: hist_buff_2dreal64_t
       real(REAL64), pointer :: data(:,:) => NULL()
+      integer, allocatable,    private :: num_samples(:,:)
    CONTAINS
       procedure :: clear => buff_2dreal64_clear
       procedure :: accumulate => buff_2dreal64_accum
@@ -118,6 +118,15 @@ module hist_buffer
          integer,                 optional, intent(in)    :: block_ind_in
          type(hist_log_messages), optional, intent(inout) :: logger
       end subroutine hist_buff_init
+   end interface
+
+   abstract interface
+      subroutine hist_buff_clear(this, logger)
+         use hist_msg_handler, only: hist_log_messages
+         import                  :: hist_buffer_t
+         class(hist_buffer_t),              intent(inout) :: this
+         type(hist_log_messages), optional, intent(inout) :: logger
+      end subroutine hist_buff_clear
    end interface
 
 CONTAINS
@@ -173,8 +182,7 @@ CONTAINS
 
       check_status = .true.
       if ( (this%horiz_axis_index() < 1)      .or.                            &
-           (.not. allocated(this%field_shape)) .or.                           &
-           (.not. allocated(this%num_samples))) then
+           (.not. allocated(this%field_shape)) ) then
          check_status = .false.
          call hist_add_error(subname,                                         &
               "buffer not properly initialized '", errors=logger)
@@ -194,24 +202,6 @@ CONTAINS
       has_blocks = allocated(this%block_begs) .and. allocated(this%block_ends)
 
    end function has_blocks
-
-   !#######################################################################
-
-   subroutine hist_buff_clear(this, logger)
-      use hist_msg_handler, only: hist_log_messages, hist_add_alloc_error
-
-      ! Dummy arguments
-      class(hist_buffer_t),              intent(inout) :: this
-      type(hist_log_messages), optional, intent(inout) :: logger
-      ! Local variables
-      integer                     :: aerr
-      character(len=*), parameter :: subname = 'hist_buff_clear'
-
-      if (this%check_status(logger, __FILE__, __LINE__ + 1)) then
-         this%num_samples = 0
-      end if
-
-   end subroutine hist_buff_clear
 
    !#######################################################################
 
@@ -253,13 +243,6 @@ CONTAINS
             call hist_add_alloc_error('field_shape', __FILE__, __LINE__ - 4,  &
                  subname=subname, errors=logger)
          end if
-         ! Allocate num_samples
-         hsize = this%field_shape(this%horiz_axis_ind)
-         allocate(this%num_samples(hsize), stat=astat)
-         if (astat /= 0) then
-            call hist_add_alloc_error('num_samples', __FILE__, __LINE__ - 2,  &
-                 subname=subname, errors=logger)
-         end if
       end if
    end subroutine init_buffer
 
@@ -299,7 +282,6 @@ CONTAINS
       integer                     :: aerr
       character(len=*), parameter :: subname = 'buff_1dreal32_clear'
 
-      call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
          allocate(this%data(this%field_shape(1)), stat=aerr)
          if (aerr /= 0) then
@@ -307,7 +289,15 @@ CONTAINS
                  subname=subname, errors=logger)
          end if
       end if
+      if (.not. allocated(this%num_samples)) then
+         allocate(this%num_samples(this%field_shape(1)), stat=aerr)
+         if (aerr /= 0) then
+            call hist_add_alloc_error('num_samples', __FILE__, __LINE__ - 2,         &
+                 subname=subname, errors=logger)
+         end if
+      end if
       this%data = 0.0_REAL32
+      this%num_samples = 0
 
    end subroutine buff_1dreal32_clear
 
@@ -347,7 +337,6 @@ CONTAINS
       integer                     :: aerr
       character(len=*), parameter :: subname = 'buff_2dreal32_clear'
 
-      call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
          allocate(this%data(this%field_shape(1), this%field_shape(2)), stat=aerr)
          if (aerr /= 0) then
@@ -355,7 +344,15 @@ CONTAINS
                  subname=subname, errors=logger)
          end if
       end if
+      if (.not. allocated(this%num_samples)) then
+         allocate(this%num_samples(this%field_shape(1), this%field_shape(2)), stat=aerr)
+         if (aerr /= 0) then
+            call hist_add_alloc_error('num_samples', __FILE__, __LINE__ - 2,         &
+                 subname=subname, errors=logger)
+         end if
+      end if
       this%data = 0.0_REAL32
+      this%num_samples = 0
 
    end subroutine buff_2dreal32_clear
 
@@ -375,7 +372,7 @@ CONTAINS
 
       do ind1 = 1, size(norm_val,1)
          do ind2 = 1, size(norm_val,2)
-            nacc = this%num_samples(ind1)
+            nacc = this%num_samples(ind1, ind2)
             if (nacc > 0) then
                norm_val(ind1, ind2) = this%data(ind1, ind2)
             else if (present(default_val)) then
@@ -421,29 +418,29 @@ CONTAINS
       select case (this%accum_type)
       case (hist_accum_lst)
          this%data(col_beg_use:col_end_use,:) = field(:,:)
-         this%num_samples(col_beg_use:col_end_use) = 1
+         this%num_samples(col_beg_use:col_end_use,:) = 1
       case (hist_accum_min)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
                fld_val = field(ind1 - col_beg_use + 1, ind2)
-               if (this%num_samples(ind1) == 0) then
+               if (this%num_samples(ind1, ind2) == 0) then
                   this%data(ind1, ind2) = fld_val
                else if (fld_val < this%data(ind1, ind2)) then
                   this%data(ind1, ind2) = fld_val
                end if ! No else, we already have the minimum value for this col
-               this%num_samples(ind1) = 1
+               this%num_samples(ind1, ind2) = 1
             end do
          end do
       case (hist_accum_max)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
                fld_val = field(ind1 - col_beg_use + 1, ind2)
-               if (this%num_samples(ind1) == 0) then
+               if (this%num_samples(ind1, ind2) == 0) then
                   this%data(ind1, ind2) = fld_val
                else if (fld_val > this%data(ind1, ind2)) then
                   this%data(ind1, ind2) = fld_val
                end if ! No else, we already have the maximum value for this col
-               this%num_samples(ind1) = 1
+               this%num_samples(ind1, ind2) = 1
             end do
          end do
       case (hist_accum_avg)
@@ -452,7 +449,7 @@ CONTAINS
                fld_val = field(ind1 - col_beg_use + 1, ind2)
                ! Compute running sum
                this%data(ind1, ind2) = this%data(ind1, ind2) + fld_val
-               this%num_samples(ind1) = this%num_samples(ind1) + 1
+               this%num_samples(ind1, ind2) = this%num_samples(ind1, ind2) + 1
             end do
          end do
       end select
@@ -561,7 +558,6 @@ CONTAINS
       integer                     :: aerr
       character(len=*), parameter :: subname = 'buff_1dreal64_clear'
 
-      call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
          allocate(this%data(this%field_shape(1)), stat=aerr)
          if (aerr /= 0) then
@@ -569,7 +565,15 @@ CONTAINS
                  subname=subname, errors=logger)
          end if
       end if
+      if (.not. allocated(this%num_samples)) then
+         allocate(this%num_samples(this%field_shape(1)), stat=aerr)
+         if (aerr /= 0) then
+            call hist_add_alloc_error('num_samples', __FILE__, __LINE__ - 1,         &
+                 subname=subname, errors=logger)
+         end if
+      end if
       this%data = 0.0_REAL64
+      this%num_samples = 0
 
    end subroutine buff_1dreal64_clear
 
@@ -701,7 +705,6 @@ CONTAINS
       integer                     :: aerr
       character(len=*), parameter :: subname = 'buff_2dreal64_clear'
 
-      call hist_buff_clear(this, logger)
       if (.not. associated(this%data)) then
          allocate(this%data(this%field_shape(1), this%field_shape(2)), stat=aerr)
          if (aerr /= 0) then
@@ -709,7 +712,15 @@ CONTAINS
                  subname=subname, errors=logger)
          end if
       end if
+      if (.not. allocated(this%num_samples)) then
+         allocate(this%num_samples(this%field_shape(1), this%field_shape(2)), stat=aerr)
+         if (aerr /= 0) then
+            call hist_add_alloc_error('num_samples', __FILE__, __LINE__ - 1,         &
+                 subname=subname, errors=logger)
+         end if
+      end if
       this%data = 0.0_REAL64
+      this%num_samples = 0
 
    end subroutine buff_2dreal64_clear
 
@@ -772,29 +783,29 @@ CONTAINS
       select case (this%accum_type)
       case (hist_accum_lst)
          this%data(col_beg_use:col_end_use,:) = field(:,:)
-         this%num_samples(col_beg_use:col_end_use) = 1
+         this%num_samples(col_beg_use:col_end_use,:) = 1
       case (hist_accum_min)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
                fld_val = field(ind1 - col_beg_use + 1, ind2)
-               if (this%num_samples(ind1) == 0) then
+               if (this%num_samples(ind1, ind2) == 0) then
                   this%data(ind1, ind2) = fld_val
                else if (fld_val < this%data(ind1, ind2)) then
                   this%data(ind1, ind2) = fld_val
                end if ! No else, we already have the minimum value for this col
-               this%num_samples(ind1) = 1
+               this%num_samples(ind1, ind2) = 1
             end do
          end do
       case (hist_accum_max)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
                fld_val = field(ind1 - col_beg_use + 1, ind2)
-               if (this%num_samples(ind1) == 0) then
+               if (this%num_samples(ind1, ind2) == 0) then
                   this%data(ind1, ind2) = fld_val
                else if (fld_val > this%data(ind1, ind2)) then
                   this%data(ind1, ind2) = fld_val
                end if ! No else, we already have the maximum value for this col
-               this%num_samples(ind1) = 1
+               this%num_samples(ind1, ind2) = 1
             end do
          end do
       case (hist_accum_avg)
@@ -803,7 +814,7 @@ CONTAINS
                fld_val = field(ind1 - col_beg_use + 1, ind2)
                ! Compute running sum
                this%data(ind1, ind2) = this%data(ind1, ind2) + fld_val
-               this%num_samples(ind1) = this%num_samples(ind1) + 1
+               this%num_samples(ind1, ind2) = this%num_samples(ind1, ind2) + 1
             end do
          end do
       end select
@@ -825,7 +836,7 @@ CONTAINS
 
       do ind1 = 1, this%field_shape(1)
          do ind2 = 1, this%field_shape(2)
-            nacc = this%num_samples(ind1)
+            nacc = this%num_samples(ind1,ind2)
             if (nacc > 0) then
                norm_val(ind1, ind2) = this%data(ind1, ind2)
             else if (present(default_val)) then

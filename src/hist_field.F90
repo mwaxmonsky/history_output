@@ -62,6 +62,7 @@ module hist_field
       procedure :: mixing_ratio      => get_mixing_ratio
       procedure :: cell_methods      => get_cell_methods
       procedure :: set_dimension_bounds
+      procedure :: clear_buffers
       final     :: finalize_field
    end type hist_field_info_t
 
@@ -306,11 +307,12 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine allocate_varid(this, num_patches)
+   subroutine allocate_varid(this, num_patches, ierr)
       class(hist_field_info_t), intent(inout) :: this
       integer,                  intent(in)    :: num_patches
+      integer,                  intent(out)   :: ierr
 
-      allocate(this%field_varid(num_patches))
+      allocate(this%field_varid(num_patches), stat=ierr)
 
    end subroutine allocate_varid
 
@@ -417,6 +419,28 @@ CONTAINS
       this%field_end_dims(3) = dimbounds(2,2)
 
    end subroutine set_dimension_bounds
+
+   !#######################################################################
+
+   subroutine clear_buffers(this, logger)
+      use hist_msg_handler,    only: hist_log_messages
+      ! Dummy Argument
+      class(hist_field_info_t) :: this
+      type(hist_log_messages), optional :: logger
+      ! Local Variables
+      class(hist_buffer_t), pointer :: next_buf
+
+      next_buf => this%buffers
+      do
+         if (associated(next_buf)) then
+            call next_buf%clear(logger=logger)
+            next_buf => next_buf%next
+         else
+            exit
+         end if
+      end do
+
+   end subroutine
 
    !#######################################################################
 
