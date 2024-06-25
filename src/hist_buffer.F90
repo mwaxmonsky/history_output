@@ -370,8 +370,8 @@ CONTAINS
       integer :: ind1, ind2
       integer :: nacc
 
-      do ind1 = 1, size(norm_val,1)
-         do ind2 = 1, size(norm_val,2)
+      do ind1 = 1, size(this%data,1)
+         do ind2 = 1, size(this%data,2)
             nacc = this%num_samples(ind1, ind2)
             if (nacc > 0) then
                norm_val(ind1, ind2) = this%data(ind1, ind2)
@@ -417,8 +417,8 @@ CONTAINS
 
       select case (this%accum_type)
       case (hist_accum_lst)
-         this%data(col_beg_use:col_end_use,:) = field(:,:)
-         this%num_samples(col_beg_use:col_end_use,:) = 1
+         this%data(:,:) = field(:,:)
+         this%num_samples(:,:) = 1
       case (hist_accum_min)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
@@ -535,7 +535,7 @@ CONTAINS
       integer :: ind1
       integer :: nacc
 
-      do ind1 = 1, this%field_shape(1)
+      do ind1 = 1, size(this%data,1)
          nacc = this%num_samples(ind1)
          if (nacc > 0) then
             norm_val(ind1) = this%data(ind1)
@@ -618,8 +618,6 @@ CONTAINS
       real(REAL64) :: fld_val
 
       if (this%has_blocks()) then
-         ! For a blocked field, <cols_or_block> is a block index
-         col_beg_use = this%block_begs(cols_or_block)
          col_end_use = this%block_ends(cols_or_block)
       else
          ! Non blocked, <cols_or_block> is the first column index
@@ -782,8 +780,8 @@ CONTAINS
 
       select case (this%accum_type)
       case (hist_accum_lst)
-         this%data(col_beg_use:col_end_use,:) = field(:,:)
-         this%num_samples(col_beg_use:col_end_use,:) = 1
+         this%data = field
+         this%num_samples = 1
       case (hist_accum_min)
          do ind1 = col_beg_use, col_end_use
             do ind2 = 1, size(field, 2)
@@ -844,8 +842,6 @@ CONTAINS
             end if
          end do
       end do
-
-!      norm_val(:,:) = this%data(:,:)
 
    end subroutine buff_2dreal64_value
 

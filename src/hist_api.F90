@@ -117,6 +117,9 @@ CONTAINS
       integer                              :: rank
       integer                              :: line_loc
       integer                              :: accum_val
+      integer                              :: shape_idx
+      integer,                 allocatable :: beg_dims(:), end_dims(:)
+      integer,                 allocatable :: buffer_shape(:)
       character(len=8)                     :: kind_string
       character(len=3)                     :: accum_string
       character(len=16)                    :: bufftype_string
@@ -239,8 +242,15 @@ CONTAINS
       line_loc = __LINE__ - 1
       if (associated(buffer)) then
          field_base => field
+         call field%beg_dims(beg_dims)
+         call field%end_dims(end_dims)
+         allocate(buffer_shape(size(buff_shape,1)))
+         buffer_shape(1) = end_dims(1) - beg_dims(1) + 1
+         if (size(buffer_shape) > 1) then
+            buffer_shape(2) = buff_shape(2)
+         end if
          call buffer%initialize(field_base, output_vol, horiz_axis_ind,       &
-              accum_val, buff_shape, block_sizes, block_ind, logger=errors)
+              accum_val, buffer_shape, block_sizes, block_ind, logger=errors)
          ! Add this buffer to its field (field should be there if buffer is)
          if (associated(field%buffers)) then
             buff_ptr => field%buffers
@@ -309,53 +319,6 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine hist_field_accumulate_1dreal64(field, data, cols_or_block,      &
-        cole, logger)
-      use hist_msg_handler, only: hist_log_messages, hist_have_error, ERROR
-      use hist_msg_handler, only: hist_add_message, VERBOSE
-      use hist_field,       only: hist_field_info_t
-      use hist_buffer,      only: hist_buffer_t
-
-      ! Dummy arguments
-      class(hist_field_info_t), pointer,  intent(inout) :: field
-      real(REAL64),                       intent(in)    :: data(:)
-      integer,                            intent(in)    :: cols_or_block
-      integer,                  optional, intent(in)    :: cole
-      type(hist_log_messages),  optional, intent(inout) :: logger
-      ! Local variables
-      class(hist_buffer_t), pointer     :: buff_ptr
-      character(len=:),     allocatable :: buff_typestr
-      character(len=*),     parameter   :: subname = 'hist_field_accumulate_1dreal64'
-
-      if (associated(field)) then
-         buff_ptr => field%buffers
-         do
-            if (associated(buff_ptr) .and.                                    &
-                 (.not. hist_have_error(errors=logger))) then
-               call hist_buffer_accumulate(buff_ptr, data, cols_or_block,     &
-                    cole=cole, logger=logger)
-               if (hist_have_error(errors=logger)) then
-                  call  logger%add_stack_frame(ERROR, __FILE__, __LINE__ - 3, &
-                       subname=subname)
-                  exit
-               else
-                  call hist_add_message(subname, VERBOSE,                     &
-                       "Accumulated data for",                                &
-                       msgstr2=trim(field%diag_name())//", Buffer type, ",    &
-                       msgstr3=trim(buff_ptr%buffer_type()),                  &
-                       logger=logger)
-                  buff_ptr => buff_ptr%next
-               end if
-            else
-               exit
-            end if
-         end do
-      end if ! No else, it is legit to pass in a null pointer
-
-   end subroutine hist_field_accumulate_1dreal64
-
-   !#######################################################################
-
    subroutine hist_field_accumulate_2d(field, data, cols_or_block,      &
         cole, logger)
       use hist_msg_handler, only: hist_log_messages, hist_have_error, ERROR
@@ -403,53 +366,6 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine hist_field_accumulate_2dreal64(field, data, cols_or_block,      &
-        cole, logger)
-      use hist_msg_handler, only: hist_log_messages, hist_have_error, ERROR
-      use hist_msg_handler, only: hist_add_message, VERBOSE
-      use hist_field,       only: hist_field_info_t
-      use hist_buffer,      only: hist_buffer_t
-
-      ! Dummy arguments
-      class(hist_field_info_t), pointer,  intent(inout) :: field
-      real(REAL64),                       intent(in)    :: data(:,:)
-      integer,                            intent(in)    :: cols_or_block
-      integer,                  optional, intent(in)    :: cole
-      type(hist_log_messages),  optional, intent(inout) :: logger
-      ! Local variables
-      class(hist_buffer_t), pointer     :: buff_ptr
-      character(len=:),     allocatable :: buff_typestr
-      character(len=*),     parameter   :: subname = 'hist_field_accumulate_2dreal64'
-
-      if (associated(field)) then
-         buff_ptr => field%buffers
-         do
-            if (associated(buff_ptr) .and.                                    &
-                 (.not. hist_have_error(errors=logger))) then
-               call hist_buffer_accumulate(buff_ptr, data, cols_or_block,     &
-                    cole=cole, logger=logger)
-               if (hist_have_error(errors=logger)) then
-                  call  logger%add_stack_frame(ERROR, __FILE__, __LINE__ - 3, &
-                       subname=subname)
-                  exit
-               else
-                  call hist_add_message(subname, VERBOSE,                     &
-                       "Accumulated data for",                                &
-                       msgstr2=trim(field%diag_name())//", Buffer type, ",    &
-                       msgstr3=trim(buff_ptr%buffer_type()),                  &
-                       logger=logger)
-                  buff_ptr => buff_ptr%next
-               end if
-            else
-               exit
-            end if
-         end do
-      end if ! No else, it is legit to pass in a null pointer
-
-   end subroutine hist_field_accumulate_2dreal64
-
-   !#######################################################################
-
    subroutine hist_buffer_accumulate_1d(buffer, field, cols_or_block,   &
         cole, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
@@ -486,42 +402,6 @@ CONTAINS
 
    !#######################################################################
 
-   subroutine hist_buffer_accumulate_1dreal64(buffer, field, cols_or_block,   &
-        cole, logger)
-      use hist_msg_handler, only: hist_log_messages, hist_add_error
-      use hist_buffer,      only: hist_buffer_t
-
-      ! Dummy arguments
-      class(hist_buffer_t),    target,   intent(inout) :: buffer
-      real(REAL64),                      intent(in)    :: field(:)
-      integer,                           intent(in)    :: cols_or_block
-      integer,                 optional, intent(in)    :: cole
-      type(hist_log_messages), optional, intent(inout) :: logger
-      ! Local variables
-      type(hist_buff_1dreal32_t), pointer          :: buff32
-      type(hist_buff_1dreal64_t), pointer          :: buff64
-      character(len=:),                allocatable :: buff_typestr
-      character(len=*), parameter :: subname = 'hist_buffer_accumulate_1dreal64'
-
-      select type(buffer)
-      class is (hist_buff_1dreal32_t)
-         ! Squeeze 64 bit data into 32 bit buffers
-         buff32 => buffer
-         call buff32%accumulate(real(field, REAL32), cols_or_block, cole,     &
-              logger)
-      class is (hist_buff_1dreal64_t)
-         buff64 => buffer
-         call buff64%accumulate(field, cols_or_block, cole, logger)
-      class default
-         buff_typestr = buffer%buffer_type()
-         call hist_add_error(subname, "unsupported buffer type, '",           &
-              errstr2=buff_typestr, errstr3="'", errors=logger)
-      end select
-
-   end subroutine hist_buffer_accumulate_1dreal64
-
-   !#######################################################################
-
    subroutine hist_buffer_accumulate_2d(buffer, field, cols_or_block,   &
         cole, logger)
       use hist_msg_handler, only: hist_log_messages, hist_add_error
@@ -541,7 +421,6 @@ CONTAINS
 
       select type(buffer)
       class is (hist_buff_2dreal32_t)
-         ! Squeeze 64 bit data into 32 bit buffers
          buff32 => buffer
          call buff32%accumulate(real(field, REAL32), cols_or_block, cole,     &
               logger)
@@ -555,42 +434,6 @@ CONTAINS
       end select
 
    end subroutine hist_buffer_accumulate_2d
-
-   !#######################################################################
-
-   subroutine hist_buffer_accumulate_2dreal64(buffer, field, cols_or_block,   &
-        cole, logger)
-      use hist_msg_handler, only: hist_log_messages, hist_add_error
-      use hist_buffer,      only: hist_buffer_t
-
-      ! Dummy arguments
-      class(hist_buffer_t),    target,   intent(inout) :: buffer
-      real(REAL64),                      intent(in)    :: field(:,:)
-      integer,                           intent(in)    :: cols_or_block
-      integer,                 optional, intent(in)    :: cole
-      type(hist_log_messages), optional, intent(inout) :: logger
-      ! Local variables
-      type(hist_buff_2dreal32_t), pointer          :: buff32
-      type(hist_buff_2dreal64_t), pointer          :: buff64
-      character(len=:),                allocatable :: buff_typestr
-      character(len=*), parameter :: subname = 'hist_buffer_accumulate_2dreal64'
-
-      select type(buffer)
-      class is (hist_buff_2dreal32_t)
-         ! Squeeze 64 bit data into 32 bit buffers
-         buff32 => buffer
-         !call buff32%accumulate(real(field, REAL32), cols_or_block, cole,     &
-         !     logger)
-      class is (hist_buff_2dreal64_t)
-         buff64 => buffer
-         call buff64%accumulate(field, cols_or_block, cole, logger)
-      class default
-         buff_typestr = buffer%buffer_type()
-         call hist_add_error(subname, "unsupported buffer type, '",           &
-              errstr2=buff_typestr, errstr3="'", errors=logger)
-      end select
-
-   end subroutine hist_buffer_accumulate_2dreal64
 
    !#######################################################################
 
