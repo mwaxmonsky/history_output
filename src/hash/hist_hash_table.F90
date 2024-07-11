@@ -184,7 +184,8 @@ CONTAINS
          deallocate(this%primary_table)
       end if
       ! Avoid too-large tables
-      this%table_size = ishft(1, MIN(tbl_size, bit_size(1) - 2))
+      this%table_size = ishft(1, MIN(tbl_size, 14))
+
       allocate(this%primary_table(this%table_size))
       if (present(key_off)) then
          this%key_offset = key_off
