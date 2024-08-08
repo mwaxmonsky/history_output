@@ -4,7 +4,6 @@ module hist_field
    use hist_hashable, only: hist_hashable_t
    use hist_buffer,   only: hist_buffer_t
    use pio,           only: var_desc_t
-   use cam_logfile, only: iulog
 
    implicit none
    private
