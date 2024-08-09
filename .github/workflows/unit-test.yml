@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Build pFUnit
-      - run: |
+        run: |
         git clone --depth 1 --branch v4.10.0 https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git
         cd pFUnit
         cmake -B./build -S.
@@ -23,12 +23,11 @@ jobs:
         cmake install
 
       - name: Checkout history
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Build
-      - run: |
+        run: |
         cmake -DCMAKE_PREFIX_PATH=/pFUnit/build/installed -B./build -S.
         cd build
         make
         ctest -V --output-junit res.xml
-        
