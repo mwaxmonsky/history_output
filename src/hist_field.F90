@@ -3,7 +3,6 @@ module hist_field
 
    use hist_hashable, only: hist_hashable_t
    use hist_buffer,   only: hist_buffer_t
-   use pio,           only: var_desc_t
 
    implicit none
    private
@@ -26,7 +25,6 @@ module hist_field
       integer,          allocatable, private :: field_shape(:)
       integer,                       private :: field_decomp
       integer,                       private :: field_num_levels
-      type(var_desc_t), allocatable, private :: field_varid(:)
       integer,          allocatable, private :: field_dimensions(:)
       logical,                       private :: field_flag_xyfill
       integer,          allocatable, private :: field_beg_dims(:)
@@ -51,11 +49,6 @@ module hist_field
       procedure :: dimensions      => get_dimensions
       procedure :: beg_dims        => get_beg_dims
       procedure :: end_dims        => get_end_dims
-      procedure :: varid_set       => is_varid_set
-      procedure :: allocate_varid
-      procedure :: varid           => get_varid
-      procedure :: set_varid
-      procedure :: reset_varid
       procedure :: sampling_sequence => get_sampling_sequence
       procedure :: flag_xyfill       => get_flag_xyfill
       procedure :: mixing_ratio      => get_mixing_ratio
@@ -298,59 +291,6 @@ CONTAINS
 
    !#######################################################################
 
-   logical function is_varid_set(this)
-      class(hist_field_info_t), intent(in) :: this
-
-      is_varid_set = allocated(this%field_varid)
-   end function is_varid_set
-
-   !#######################################################################
-
-   subroutine allocate_varid(this, num_patches, ierr)
-      class(hist_field_info_t), intent(inout) :: this
-      integer,                  intent(in)    :: num_patches
-      integer,                  intent(out)   :: ierr
-
-      allocate(this%field_varid(num_patches), stat=ierr)
-
-   end subroutine allocate_varid
-
-   !#######################################################################
-
-   type(var_desc_t) function get_varid(this, patch_index)
-      class(hist_field_info_t), intent(in) :: this
-      integer,                  intent(in) :: patch_index
-
-      get_varid = this%field_varid(patch_index)
-
-   end function get_varid
-
-   !#######################################################################
-
-   subroutine set_varid(this, patch_index, varid)
-      class(hist_field_info_t), intent(inout) :: this
-      integer,                  intent(in)    :: patch_index
-      type(var_desc_t),         intent(in)    :: varid
-
-      if (allocated(this%field_varid)) then
-         this%field_varid(patch_index) = varid
-      end if
-
-   end subroutine set_varid
-
-   !#######################################################################
-
-   subroutine reset_varid(this)
-      class(hist_field_info_t), intent(inout) :: this
-
-      if (allocated(this%field_varid)) then
-         deallocate(this%field_varid)
-      end if
-
-   end subroutine reset_varid
-
-   !#######################################################################
-
    function get_sampling_sequence(this) result(info)
       class(hist_field_info_t), intent(in) :: this
       character(len=:), allocatable        :: info
@@ -466,9 +406,6 @@ CONTAINS
       end if
       if (allocated(this%field_accumulate_type)) then
          deallocate(this%field_accumulate_type)
-      end if
-      if (allocated(this%field_varid)) then
-         deallocate(this%field_varid)
       end if
       if (allocated(this%field_dimensions)) then
          deallocate(this%field_dimensions)
