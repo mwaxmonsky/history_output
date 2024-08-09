@@ -20,7 +20,7 @@ jobs:
           cd pFUnit
           cmake -B./build -S.
           cd build
-          cmake install
+          make install
 
       - name: Checkout history
         uses: actions/checkout@v4
