@@ -4,7 +4,7 @@ on:
   push:
     branch: unit-testing
   workflow_dispatch:
-  pull_request
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
