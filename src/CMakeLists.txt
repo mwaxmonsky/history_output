@@ -4,7 +4,8 @@ set(HISTORY_SOURCES
   hist_field.F90
 )
 
-add_library(history)
+add_library(history ${HISTORY_SOURCES})
+
 target_compile_options(history PRIVATE -ffree-line-length-none)
 
 add_subdirectory(util)
