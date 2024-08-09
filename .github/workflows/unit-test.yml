@@ -14,6 +14,9 @@ jobs:
   gcc:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout history
+        uses: actions/checkout@v4
+
       - name: Build pFUnit
         run: |
           git clone --depth 1 --branch v4.10.0 https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git
@@ -22,12 +25,8 @@ jobs:
           cd build
           make install
 
-      - name: Checkout history
-        uses: actions/checkout@v4
-
       - name: Build history
         run: |
-          ls /home/runner/work/history_output/history_output/pFUnit/build/installed
           cmake -DCMAKE_PREFIX_PATH=/home/runner/work/history_output/history_output/pFUnit/build/installed -B./build -S.
           cd build
           make
