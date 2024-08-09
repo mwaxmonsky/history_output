@@ -6,7 +6,7 @@ option(HISTORY_ENABLE_CODE_COVERAGE "Run code coverage tool" OFF)
 set(DCMAKE_BUILD_TYPE Debug)
 add_subdirectory(src)
 
-if(HISTORY_ENABLE_TESTS)
+if(HISTORY_ENABLE_TESTS OR HISTORY_ENABLE_CODE_COVERAGE)
   enable_testing()
   add_subdirectory(test)
 endif()
