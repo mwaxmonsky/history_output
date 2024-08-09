@@ -1,0 +1,33 @@
+@test
+subroutine test_hash_table_add_get()
+  use funit
+  use hist_hash_table, only: hist_hash_table_t
+  use hist_hashable,   only: hist_hashable_char_t
+  use hist_hashable,   only: new_hashable_char
+  use hist_hashable,   only: hist_hashable_t
+
+  type(hist_hash_table_t)             :: htable
+  type(hist_hashable_char_t), pointer :: hp    => NULL()
+  class(hist_hashable_t),     pointer :: hpout => NULL()
+
+  call htable%initialize(4)
+  call new_hashable_char("1", hp)
+  call htable%add_hash_key(hp)
+  hpout=>htable%table_value("1")
+
+  @assertEqual("1", hpout%key())
+
+end subroutine test_hash_table_add_get
+
+@test
+subroutine test_hash_table_get_key()
+  use funit
+  use hist_hash_table, only: hist_hash_table_t
+
+  type(hist_hash_table_t)             :: htable
+
+  call htable%initialize(4)
+
+  @assertEqual(1, htable%key_hash("1"))
+
+end subroutine test_hash_table_get_key

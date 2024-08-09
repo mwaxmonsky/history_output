@@ -1,0 +1,29 @@
+@test
+subroutine test_hashable_int()
+  use funit
+  use hist_hashable, only: hist_hashable_int_t
+  use hist_hashable, only: new_hashable_int
+
+  type(hist_hashable_int_t), pointer :: p=>NULL()
+
+  call new_hashable_int(1, p)
+
+  @assertEqual(1, p%val())
+  @assertEqual("1", p%key())
+
+end subroutine test_hashable_int
+
+@test
+subroutine test_hashable_char()
+  use funit
+  use hist_hashable, only: hist_hashable_char_t
+  use hist_hashable, only: new_hashable_char
+
+  type(hist_hashable_char_t), pointer :: p=>NULL()
+
+  call new_hashable_char("a", p)
+
+  @assertEqual("a", p%key())
+
+end subroutine test_hashable_char
+
