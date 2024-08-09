@@ -30,4 +30,7 @@ jobs:
           cmake -DCMAKE_PREFIX_PATH=/pFUnit/build/installed -B./build -S.
           cd build
           make
-          ctest -V --output-junit res.xml
+
+      - name: Run tests
+        run: |
+          cd build && ctest -V --output-junit res.xml
