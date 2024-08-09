@@ -16,18 +16,18 @@ jobs:
     steps:
       - name: Build pFUnit
         run: |
-        git clone --depth 1 --branch v4.10.0 https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git
-        cd pFUnit
-        cmake -B./build -S.
-        cd build
-        cmake install
+          git clone --depth 1 --branch v4.10.0 https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git
+          cd pFUnit
+          cmake -B./build -S.
+          cd build
+          cmake install
 
       - name: Checkout history
         uses: actions/checkout@v4
 
       - name: Build
         run: |
-        cmake -DCMAKE_PREFIX_PATH=/pFUnit/build/installed -B./build -S.
-        cd build
-        make
-        ctest -V --output-junit res.xml
+          cmake -DCMAKE_PREFIX_PATH=/pFUnit/build/installed -B./build -S.
+          cd build
+          make
+          ctest -V --output-junit res.xml
