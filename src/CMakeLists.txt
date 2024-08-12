@@ -11,6 +11,4 @@ target_compile_options(history PRIVATE -ffree-line-length-none)
 add_subdirectory(util)
 add_subdirectory(hash)
 
-# set_target_properties (history PROPERTIES
-#   Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(history PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
