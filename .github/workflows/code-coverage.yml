@@ -55,7 +55,7 @@ jobs:
         run: |
           source venv/bin/activate
           cd build
-          gcovr -r .. --filter '\.\./src' --html history_code_coverage.html
+          gcovr -r .. --filter '\.\./src' --html history_code_coverage.html --txt
 
       - name: Upload code coverage results
         uses: actions/upload-artifact@v4
