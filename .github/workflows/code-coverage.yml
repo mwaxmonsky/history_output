@@ -41,6 +41,7 @@ jobs:
 
       - name: Upload unit test results
         uses: actions/upload-artifact@v4
+        with:
           name: unit-test-results
           path: build/test_results.xml
 
@@ -58,6 +59,7 @@ jobs:
 
       - name: Upload code coverage results
         uses: actions/upload-artifact@v4
+        with:
           name: code-coverage-results
           path: build/history_code_coverage.html
 
