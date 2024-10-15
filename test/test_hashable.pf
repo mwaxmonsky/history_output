@@ -8,8 +8,9 @@ subroutine test_hashable_int_key_and_val_equal_input()
 
   call new_hashable_int(1, p)
 
-  @assertEqual(1, p%val())   ! Assert value is the same it was created with
-  @assertEqual("1", p%key()) ! Assert key is string version of val
+  ! Assert value and key are the same the hashable was created with
+  @assertEqual(1, p%val())
+  @assertEqual("1", p%key())
 
 end subroutine test_hashable_int_key_and_val_equal_input
 
@@ -23,7 +24,8 @@ subroutine test_hashable_char_key_equal_input()
 
   call new_hashable_char("a", p)
 
-  @assertEqual("a", p%key()) ! Assert key is same as input into object
+  ! Assert key is same as input into the hashable
+  @assertEqual("a", p%key())
 
 end subroutine test_hashable_char_key_equal_input
 
