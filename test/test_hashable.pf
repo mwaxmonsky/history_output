@@ -11,7 +11,7 @@ subroutine test_hashable_int_key_and_val_equal_input()
   @assertEqual(1, p%val())   ! Assert value is the same it was created with
   @assertEqual("1", p%key()) ! Assert key is string version of val
 
-end subroutine test_hashable_int
+end subroutine test_hashable_int_key_and_val_equal_input
 
 @test
 subroutine test_hashable_char_key_equal_input()
@@ -25,5 +25,5 @@ subroutine test_hashable_char_key_equal_input()
 
   @assertEqual("a", p%key()) ! Assert key is same as input into object
 
-end subroutine test_hashable_char
+end subroutine test_hashable_char_key_equal_input
 
