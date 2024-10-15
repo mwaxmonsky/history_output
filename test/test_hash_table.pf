@@ -1,5 +1,5 @@
 @test
-subroutine test_hash_table_add_get()
+subroutine test_hash_table_add_hashable_char_value_same_after_get()
   use funit
   use hist_hash_table, only: hist_hash_table_t
   use hist_hashable,   only: hist_hashable_char_t
@@ -15,12 +15,13 @@ subroutine test_hash_table_add_get()
   call htable%add_hash_key(hp)
   hpout=>htable%table_value("1")
 
+  ! Verify the key of the hashed value from the hashable is the same as the hashable that was passed in
   @assertEqual("1", hpout%key())
 
-end subroutine test_hash_table_add_get
+end subroutine test_hash_table_add_hashable_char_value_same_after_get
 
 @test
-subroutine test_hash_table_get_key()
+subroutine test_hash_table_key_has_is_expected()
   use funit
   use hist_hash_table, only: hist_hash_table_t
 
@@ -28,6 +29,7 @@ subroutine test_hash_table_get_key()
 
   call htable%initialize(4)
 
+  ! Assert the key hash is consistent with expected implementation
   @assertEqual(1, htable%key_hash("1"))
 
-end subroutine test_hash_table_get_key
+end subroutine test_hash_table_key_has_is_expected
