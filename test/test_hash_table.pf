@@ -21,7 +21,7 @@ subroutine test_hash_table_add_hashable_char_value_same_after_get()
 end subroutine test_hash_table_add_hashable_char_value_same_after_get
 
 @test
-subroutine test_hash_table_key_has_is_expected()
+subroutine test_hash_table_key_is_expected()
   use funit
   use hist_hash_table, only: hist_hash_table_t
 
@@ -29,7 +29,7 @@ subroutine test_hash_table_key_has_is_expected()
 
   call htable%initialize(4)
 
-  ! Assert the key hash is consistent with expected implementation
+  ! Assert the key hash method returns the integer version of the provided string
   @assertEqual(1, htable%key_hash("1"))
 
-end subroutine test_hash_table_key_has_is_expected
+end subroutine test_hash_table_key_is_expected
